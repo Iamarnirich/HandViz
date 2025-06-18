@@ -73,7 +73,7 @@ export default function ResetPasswordPage() {
           {message && (
             <p
               className={`text-center text-sm ${
-                message.includes("succès") ? "text-green-600" : "text-red-600"
+                message.includes("succès") ? "text-black-600" : "text-red-600"
               }`}
             >
               {message}

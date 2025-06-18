@@ -120,7 +120,7 @@ export default function ConnexionPage() {
           )}
 
           {erreur && <p className="text-red-600">{erreur}</p>}
-          {success && <p className="text-green-600">{success}</p>}
+          {success && <p className="text-black-600">{success}</p>}
 
           <button
             type="submit"
