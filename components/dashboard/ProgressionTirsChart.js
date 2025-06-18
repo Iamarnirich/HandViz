@@ -50,7 +50,7 @@ export default function ProgressionTirsChart({ data }) {
   return (
     <div className="bg-white shadow-md rounded-2xl p-6">
       <h2 className="text-lg font-semibold text-center text-gray-800 mb-4">
-        Progression des buts (par position)
+        Progression des buts
       </h2>
 
       {progressionData.length > 0 ? (

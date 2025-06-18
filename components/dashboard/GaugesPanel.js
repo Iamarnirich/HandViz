@@ -70,7 +70,7 @@ export default function GaugesPanel({ data }) {
         if (resultat.includes("but")) egalNumSuccess++;
       }
 
-      if (resultat.includes("7m")) {
+      if (secteur.includes("7m")) {
         tirs7mTotal++;
         if (resultat.includes("but")) tirs7mReussis++;
       }
