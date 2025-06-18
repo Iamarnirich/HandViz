@@ -25,7 +25,7 @@ export default function ProgressionTirsChart({ data }) {
       .filter(
         (e) =>
           typeof e.resultat_cthb === "string" &&
-          e.resultat_cthb.toLowerCase().includes("but") &&
+          e.resultat_cthb.toLowerCase().includes("but usdk") &&
           e.position
       )
       .map((e) => ({
@@ -79,7 +79,7 @@ export default function ProgressionTirsChart({ data }) {
               tickLine={false}
               axisLine={{ stroke: "#D4AF37" }}
               label={{
-                value: "Nombre de buts",
+                value: "N° Buts",
                 angle: -90,
                 position: "insideLeft",
                 offset: 10,
