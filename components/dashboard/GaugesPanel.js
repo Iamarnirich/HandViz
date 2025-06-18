@@ -102,8 +102,11 @@ export default function GaugesPanel({ data }) {
       },
       {
         label: "Engagement Rapide",
-        value: (engagementRapide / engagementRapide) * 100,
-        count: `${engagementRapide}`,
+        value:
+          engagementRapide > 0
+            ? (engagementRapide / engagementRapide) * 100
+            : 0,
+        count: `${engagementRapide}/${engagementRapide}`,
         color: "#D4AF37",
       },
       {
@@ -156,9 +159,9 @@ export default function GaugesPanel({ data }) {
             >
               <div className="text-center mt-4">
                 <p className="text-lg font-bold text-gray-900 tracking-wide">
-                  {g.label.includes("Engagement")
+                  {g.label.includes("er usdk")
                     ? g.value
-                    : `${g.value.toFixed(1)}%`}
+                    : `${g.value.toFixed(0)}%`}
                 </p>
               </div>
             </CircularProgressbarWithChildren>
