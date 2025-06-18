@@ -148,7 +148,7 @@ export default function GaugesPanel({ data }) {
               styles={buildStyles({
                 rotation: 0.75,
                 strokeLinecap: "round",
-                trailColor: "#e5e7eb",
+                trailColor: "#1a1a1a",
                 pathColor: g.color,
                 textColor: "#1f2937",
               })}
