@@ -72,7 +72,7 @@ export default function NavBar() {
                 className="text-2xl text-[#b3974e] font-semibold"
                 style={{ fontFamily: "Poppins, sans-serif" }}
               >
-                SmartHands
+                SmartHand
               </span>
             </Link>
           </div>
