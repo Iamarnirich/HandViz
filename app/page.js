@@ -15,10 +15,10 @@ export default function HomePage() {
             height={120}
           />
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900">
-            Bienvenue sur <span className="text-[#b3974e]">SmartHand</span>
+            Bienvenue sur <span className="text-[#b3974e]">HandViz</span>
           </h1>
           <p className="max-w-xl text-lg text-gray-600">
-            L’outil stratégique ultime pour suivre les performances de vos
+            L&apos;outil stratégique ultime pour suivre les performances de vos
             joueuses, comparer, analyser et prendre les meilleures décisions.
           </p>
 
