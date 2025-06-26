@@ -15,6 +15,8 @@ export default function GaugesPanel({ data }) {
     let possessions = 0;
     let attaquesPlacees = 0,
       totalAttaques = 0;
+    let grandespace = 0,
+      getotal = 0;
     let caSuccess = 0,
       caTotal = 0;
     let engagementRapide = 0;
@@ -46,9 +48,9 @@ export default function GaugesPanel({ data }) {
       )
         tirsRates++;
 
-      if (action.includes("att")) {
+      if (action.includes("attaque ")) {
         totalAttaques++;
-        if (action.includes("att placée")) attaquesPlacees++;
+        if (action.includes("attaque usdk")) attaquesPlacees++;
       }
 
       if (
@@ -58,6 +60,21 @@ export default function GaugesPanel({ data }) {
       ) {
         caTotal++;
         if (resultat.includes("but")) caSuccess++;
+      }
+      if (
+        action.includes("ca") ||
+        action.includes("er") ||
+        action.includes("mb") ||
+        action.includes("transition")
+      ) {
+        getotal++;
+        if (
+          action.includes("ca usdk") ||
+          action.includes("er usdk") ||
+          action.includes("mb usdk") ||
+          action.includes("transition usdk")
+        )
+          grandespace++;
       }
 
       if (action.includes("er usdk")) engagementRapide++;
@@ -83,19 +100,25 @@ export default function GaugesPanel({ data }) {
 
     return [
       {
-        label: "EFF %",
+        label: "Efficacité globale",
         value: possessions > 0 ? (tirs / possessions) * 100 : 0,
         count: `${tirs}/${possessions}`,
         color: "#D4AF37",
       },
       {
-        label: "% Attaque Placée",
+        label: "Efficacité Attaque Placée",
         value: totalAttaques > 0 ? (attaquesPlacees / totalAttaques) * 100 : 0,
         count: `${attaquesPlacees}/${totalAttaques}`,
         color: "#D4AF37",
       },
       {
-        label: "EFF Tirs %",
+        label: "Efficacité Grand Espace",
+        value: caTotal > 0 ? (grandespace / getotal) * 100 : 0,
+        count: `${grandespace}/${getotal}`,
+        color: "#D4AF37",
+      },
+      {
+        label: "Efficacité tirs",
         value: (tirsReussis / (tirsReussis + tirsRates || 1)) * 100,
         count: `${tirsReussis}/${tirsReussis + tirsRates}`,
         color: "#D4AF37",

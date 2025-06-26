@@ -2,88 +2,83 @@
 
 import { useMemo } from "react";
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
   LabelList,
+  Cell,
 } from "recharts";
 
-export default function ProgressionTirsChart({ data }) {
-  const progressionData = useMemo(() => {
-    const convertToMinutes = (pos) => {
-      const millis = Number(pos);
-      if (isNaN(millis)) return 0;
-      const minutes = Math.floor(millis / 60000);
-      const seconds = Math.floor((millis % 60000) / 1000);
-      return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-    };
+const BAR_COLOR = "#D4AF37";
+const LABEL_COLOR = "#111";
 
-    const events = data
+export default function ProgressionTirsChart({ data }) {
+  const histogramData = useMemo(() => {
+    const interval = 5; // minutes
+    const bins = {};
+
+    data
       .filter(
         (e) =>
           typeof e.resultat_cthb === "string" &&
           e.resultat_cthb.toLowerCase().includes("but usdk") &&
           e.position
       )
-      .map((e) => ({
-        ...e,
-        label: convertToMinutes(e.position),
-        time: Number(e.position),
-      }))
-      .sort((a, b) => a.time - b.time);
+      .forEach((e) => {
+        const time = Number(e.position);
+        const minute = Math.floor(time / 60000);
+        const bin = `${minute - (minute % interval)}-${
+          minute - (minute % interval) + interval - 1
+        }`;
+        bins[bin] = (bins[bin] || 0) + 1;
+      });
 
-    let count = 0;
-    const cumulative = events.map((e) => {
-      count++;
-      return {
-        minute: e.label,
-        buts: count,
-      };
-    });
-
-    return cumulative;
+    return Object.entries(bins).map(([range, count]) => ({
+      range,
+      buts: count,
+    }));
   }, [data]);
 
   return (
-    <div className="bg-white shadow-md rounded-2xl p-6">
-      <h2 className="text-lg font-semibold text-center text-gray-800 mb-4">
-        Progression des buts
+    <div className="bg-white shadow-md rounded-2xl p-6 border border-gray-200">
+      <h2 className="text-xl font-bold text-center text-[#111] mb-4 uppercase tracking-wide">
+        Progréssion de buts
       </h2>
 
-      {progressionData.length > 0 ? (
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart
-            data={progressionData}
+      {histogramData.length > 0 ? (
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart
+            data={histogramData}
             margin={{ top: 10, right: 30, left: 0, bottom: 30 }}
           >
             <XAxis
-              dataKey="minute"
-              tick={{ fontSize: 12, fill: "#000" }}
-              stroke="#D4AF37"
+              dataKey="range"
+              tick={{ fontSize: 12, fill: LABEL_COLOR }}
+              stroke={BAR_COLOR}
+              axisLine={{ stroke: BAR_COLOR }}
               tickLine={false}
-              axisLine={{ stroke: "#D4AF37" }}
               label={{
-                value: "Minute",
-                position: "insideBottomRight",
+                value: "Temps (min)",
+                position: "insideBottom",
                 offset: -10,
-                fill: "#111",
+                fill: LABEL_COLOR,
               }}
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fontSize: 12, fill: "#000" }}
-              stroke="#D4AF37"
+              tick={{ fontSize: 12, fill: LABEL_COLOR }}
+              stroke={BAR_COLOR}
+              axisLine={{ stroke: BAR_COLOR }}
               tickLine={false}
-              axisLine={{ stroke: "#D4AF37" }}
               label={{
-                value: "N° Buts",
+                value: "Nombre de buts",
                 angle: -90,
                 position: "insideLeft",
                 offset: 10,
-                fill: "#111",
+                fill: LABEL_COLOR,
               }}
             />
             <Tooltip
@@ -92,16 +87,13 @@ export default function ProgressionTirsChart({ data }) {
                 border: "1px solid #ccc",
                 fontSize: "14px",
               }}
-              formatter={(v) => [`${v} buts`, ""]}
+              formatter={(v) => [`${v}`, "Buts"]}
             />
-            <Area
-              type="monotone"
+            <Bar
               dataKey="buts"
-              stroke="#D4AF37"
-              fill="#D4AF37"
-              fillOpacity={0.2}
-              strokeWidth={3}
-              dot={{ r: 3, fill: "#000" }}
+              fill={BAR_COLOR}
+              radius={[8, 8, 0, 0]}
+              barSize={30}
             >
               <LabelList
                 dataKey="buts"
@@ -109,11 +101,11 @@ export default function ProgressionTirsChart({ data }) {
                 fill="#000"
                 fontSize={12}
               />
-            </Area>
-          </AreaChart>
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       ) : (
-        <p className="text-center text-gray-400">Aucun but trouvé.</p>
+        <p className="text-center text-gray-400 italic">Aucun but trouvé.</p>
       )}
     </div>
   );
