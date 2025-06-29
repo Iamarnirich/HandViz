@@ -4,75 +4,93 @@ import Image from "next/image";
 import { useMemo } from "react";
 
 const secteurs = {
-  ALG: { label: "Aile Gauche", top: "92%", left: "10%" },
-  ARG: { label: "Arrière Gauche", top: "80%", left: "20%" },
-  "Central 6m": { label: "6m-central", top: "60%", left: "50%" },
-  "Central 7-9m": { label: "7-9m-central", top: "35%", left: "50%" }, // inversé
-  "Central 9m": { label: "9m-central", top: "45%", left: "50%" },
-  ARD: { label: "Arrière Droit", top: "80%", left: "80%" },
-  ALD: { label: "Aile Droite", top: "92%", left: "90%" },
+  ALG: { label: "ALG", top: "92%", left: "10%" },
+  ARG: { label: "ARG", top: "80%", left: "20%" },
+  "Central 6m": { label: "C 6m", top: "60%", left: "50%" },
+  "Central 7-9m": { label: "C 7-9m", top: "35%", left: "50%" },
+  "Central 9m": { label: "C 9m", top: "45%", left: "50%" },
+  ARD: { label: "ARD", top: "80%", left: "80%" },
+  ALD: { label: "ALD", top: "92%", left: "90%" },
   "1-2G": { label: "1-2G", top: "70%", left: "30%" },
   "1-2D": { label: "1-2D", top: "70%", left: "70%" },
-  "7M": { label: "7M", top: "50%", left: "50%" },
 };
 
 export default function TerrainHandball({ data }) {
-  const totalUSDK = useMemo(
-    () =>
-      data.filter(
-        (e) =>
-          typeof e.nom_action === "string" &&
-          e.nom_action.toLowerCase().includes("usdk")
-      ).length,
-    [data]
-  );
-
-  const counts = useMemo(() => {
+  const statsBySecteur = useMemo(() => {
     const map = {};
     data.forEach((e) => {
       const secteur = e.secteur;
+      const resultat = e.resultat_cthb?.toLowerCase() || "";
       const action = e.nom_action?.toLowerCase() || "";
+
       if (secteur && action.includes("usdk")) {
-        map[secteur] = (map[secteur] || 0) + 1;
+        if (!map[secteur]) {
+          map[secteur] = { tirs: 0, buts: 0 };
+        }
+        map[secteur].tirs++;
+        if (resultat.includes("but")) {
+          map[secteur].buts++;
+        }
       }
     });
     return map;
   }, [data]);
 
-  const getPourcentage = (secteur) => {
-    const count = counts[secteur] || 0;
-    const percent = totalUSDK > 0 ? (count / totalUSDK) * 100 : 0;
-    return percent > 0 ? `${percent.toFixed(1)}%` : "";
+  const getColor = (eff) => {
+    if (eff >= 75) return "bg-green-500/90";
+    if (eff >= 60) return "bg-yellow-400/90";
+    if (eff >= 30) return "bg-orange-400/90";
+    return "bg-red-500/90";
   };
 
+  const getSize = (count, max) => {
+    if (!max) return "scale-75";
+    const ratio = count / max;
+    if (ratio > 0.8) return "scale-125";
+    if (ratio > 0.6) return "scale-110";
+    if (ratio > 0.3) return "scale-100";
+    return "scale-90";
+  };
+
+  const maxTirs = Math.max(
+    ...Object.values(statsBySecteur).map((v) => v.tirs),
+    1
+  );
+
   return (
-    <div className="relative w-full max-w-4xl mx-auto aspect-[2/1] rounded-xl overflow-hidden shadow-xl border bg-white">
+    <div className="relative w-full max-w-2xl mx-auto rounded-xl overflow-hidden shadow-xl border bg-white">
       <Image
         src="/terrainHandball.png"
         alt="Demi-terrain de handball"
-        fill
-        sizes="(max-width: 768px) 100vw, 800px"
-        className="object-cover brightness-[0.9]"
+        width={500}
+        height={300}
+        className="w-full h-auto object-contain brightness-[0.95]"
       />
 
       {Object.entries(secteurs).map(([key, pos]) => {
-        const pourcentage = getPourcentage(key);
-        if (!pourcentage) return null;
+        const stats = statsBySecteur[key];
+        if (!stats || stats.tirs === 0) return null;
+        const eff = (stats.buts / stats.tirs) * 100;
+        const bg = getColor(eff);
+        const size = getSize(stats.tirs, maxTirs);
 
         return (
           <div
             key={key}
-            className="absolute text-xs font-semibold text-white bg-[#D4AF37]/95 px-2 py-1 rounded-full shadow-lg backdrop-blur-sm text-center"
+            className={`absolute text-xs font-semibold text-white px-2 py-1 rounded-lg shadow-lg backdrop-blur-sm text-center transition-transform duration-300 ${bg} ${size}`}
             style={{
               top: pos.top,
               left: pos.left,
               transform: "translate(-50%, -50%)",
             }}
           >
-            <div className="text-[10px] font-semibold bg-black/70 text-white px-1.5 py-[1px] rounded-sm mb-1">
+            <div className="text-[11px] font-bold leading-tight">
               {pos.label}
             </div>
-            <div>{pourcentage}</div>
+            <div className="text-[10px]">
+              {stats.buts}/{stats.tirs}
+            </div>
+            <div className="text-[10px] italic">{eff.toFixed(0)}%</div>
           </div>
         );
       })}

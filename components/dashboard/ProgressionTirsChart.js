@@ -8,105 +8,188 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  LabelList,
-  Cell,
+  ReferenceLine,
+  ReferenceDot,
+  Legend,
+  Label,
 } from "recharts";
 
-const BAR_COLOR = "#D4AF37";
-const LABEL_COLOR = "#111";
+const LABEL_COLOR = "#1a1a1a";
+
+const PHASES = {
+  "attaque placée": { color: "#22c55e", key: "ap" },
+  "contre-attaque": { color: "#ef4444", key: "ca" },
+  "engagement rapide": { color: "#3b82f6", key: "er" },
+  transition: { color: "#facc15", key: "tr" },
+  "montée de balle": { color: "#a855f7", key: "mb" },
+};
+
+function extractMinuteFromMillis(ms) {
+  return Math.floor(Number(ms) / 60000);
+}
 
 export default function ProgressionTirsChart({ data }) {
-  const histogramData = useMemo(() => {
-    const interval = 5; // minutes
-    const bins = {};
+  const { offensif, defensif, events } = useMemo(() => {
+    const off = {},
+      def = {},
+      evts = [];
 
-    data
-      .filter(
-        (e) =>
-          typeof e.resultat_cthb === "string" &&
-          e.resultat_cthb.toLowerCase().includes("but usdk") &&
-          e.position
-      )
-      .forEach((e) => {
-        const time = Number(e.position);
-        const minute = Math.floor(time / 60000);
-        const bin = `${minute - (minute % interval)}-${
-          minute - (minute % interval) + interval - 1
-        }`;
-        bins[bin] = (bins[bin] || 0) + 1;
+    data.forEach((e) => {
+      const resCTHB = e.resultat_cthb?.toLowerCase() || "";
+      const resLIM = e.resultat_limoges?.toLowerCase() || "";
+      const nom = e.nom_action?.toLowerCase() || "";
+      const minute = extractMinuteFromMillis(e.position);
+      if (minute === null || minute > 60) return;
+
+      const addTo = (store, phaseKey) => {
+        if (!store[minute]) store[minute] = {};
+        store[minute][phaseKey] = (store[minute][phaseKey] || 0) + 1;
+      };
+
+      if (resCTHB.includes("but usdk")) {
+        for (const { key } of Object.values(PHASES)) {
+          if (nom.includes(key)) addTo(off, key);
+        }
+      }
+
+      if (resLIM.includes("but limoges")) {
+        for (const { key } of Object.values(PHASES)) {
+          if (nom.includes(key)) addTo(def, key);
+        }
+      }
+
+      if (resCTHB.includes("tto") || resLIM.includes("tto")) {
+        evts.push({ type: "tto", minute });
+      }
+      if (
+        resCTHB.includes("exclusion") ||
+        resLIM.includes("exclusion") ||
+        resCTHB.includes("2' obtenu") ||
+        resLIM.includes("2' obtenu")
+      ) {
+        evts.push({ type: "exclusion", minute });
+      }
+      if (resCTHB.includes("carton rouge") || resLIM.includes("carton rouge")) {
+        evts.push({ type: "rouge", minute });
+      }
+    });
+
+    const formatData = (timeline) => {
+      return Array.from({ length: 61 }, (_, m) => {
+        const minuteData = { minute: m };
+        const phaseCounts = timeline[m] || {};
+        for (const phase in phaseCounts) {
+          minuteData[phase] = phaseCounts[phase];
+        }
+        return minuteData;
       });
+    };
 
-    return Object.entries(bins).map(([range, count]) => ({
-      range,
-      buts: count,
-    }));
+    return {
+      offensif: formatData(off),
+      defensif: formatData(def),
+      events: evts,
+    };
   }, [data]);
 
-  return (
-    <div className="bg-white shadow-md rounded-2xl p-6 border border-gray-200">
-      <h2 className="text-xl font-bold text-center text-[#111] mb-4 uppercase tracking-wide">
-        Progréssion de buts
-      </h2>
+  const renderBars = (stackId) =>
+    Object.entries(PHASES).map(([label, { key, color }]) => (
+      <Bar
+        key={key}
+        dataKey={key}
+        stackId={stackId}
+        fill={color}
+        name={label}
+        radius={[4, 4, 0, 0]}
+        barSize={14}
+        isAnimationActive={true}
+      />
+    ));
 
-      {histogramData.length > 0 ? (
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart
-            data={histogramData}
-            margin={{ top: 10, right: 30, left: 0, bottom: 30 }}
-          >
+  const renderEventMarkers = (isDefensif = false) =>
+    events.map((ev, idx) => (
+      <ReferenceDot
+        key={idx + (isDefensif ? "d" : "o")}
+        x={ev.minute}
+        y={isDefensif ? -0.5 : 0.5}
+        r={6}
+        fill={
+          ev.type === "tto"
+            ? "#0f172a"
+            : ev.type === "exclusion"
+            ? "#e11d48"
+            : "#9333ea"
+        }
+        stroke="#fff"
+        label={{
+          value:
+            ev.type === "tto"
+              ? "TTO"
+              : ev.type === "exclusion"
+              ? "2min"
+              : "Rouge",
+          position: "top",
+          fontSize: 10,
+          fill: LABEL_COLOR,
+        }}
+      />
+    ));
+
+  return (
+    <div className="w-full flex flex-col gap-16 px-8 max-w-6xl mx-auto">
+      {/* Timeline offensive */}
+      <div>
+        <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
+          Timeline Offensif – Buts marqués
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={offensif} margin={{ top: 20, bottom: 30 }}>
             <XAxis
-              dataKey="range"
-              tick={{ fontSize: 12, fill: LABEL_COLOR }}
-              stroke={BAR_COLOR}
-              axisLine={{ stroke: BAR_COLOR }}
-              tickLine={false}
-              label={{
-                value: "Temps (min)",
-                position: "insideBottom",
-                offset: -10,
-                fill: LABEL_COLOR,
-              }}
+              dataKey="minute"
+              ticks={[0, 10, 20, 30, 40, 50, 60]}
+              stroke={LABEL_COLOR}
             />
-            <YAxis
-              allowDecimals={false}
-              tick={{ fontSize: 12, fill: LABEL_COLOR }}
-              stroke={BAR_COLOR}
-              axisLine={{ stroke: BAR_COLOR }}
-              tickLine={false}
-              label={{
-                value: "Nombre de buts",
-                angle: -90,
-                position: "insideLeft",
-                offset: 10,
-                fill: LABEL_COLOR,
-              }}
+            <YAxis stroke={LABEL_COLOR} allowDecimals={false} />
+            <Tooltip />
+            <Legend verticalAlign="top" height={36} iconSize={12} />
+            <ReferenceLine
+              x={30}
+              stroke="#6b7280"
+              strokeDasharray="3 3"
+              label={{ value: "Mi-temps", position: "top" }}
             />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "#fff",
-                border: "1px solid #ccc",
-                fontSize: "14px",
-              }}
-              formatter={(v) => [`${v}`, "Buts"]}
-            />
-            <Bar
-              dataKey="buts"
-              fill={BAR_COLOR}
-              radius={[8, 8, 0, 0]}
-              barSize={30}
-            >
-              <LabelList
-                dataKey="buts"
-                position="top"
-                fill="#000"
-                fontSize={12}
-              />
-            </Bar>
+            {renderBars("a")}
+            {renderEventMarkers(false)}
           </BarChart>
         </ResponsiveContainer>
-      ) : (
-        <p className="text-center text-gray-400 italic">Aucun but trouvé.</p>
-      )}
+      </div>
+
+      {/* Timeline défensive */}
+      <div>
+        <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
+          Timeline Défensif – Buts encaissés
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={defensif} margin={{ top: 20, bottom: 30 }}>
+            <XAxis
+              dataKey="minute"
+              ticks={[0, 10, 20, 30, 40, 50, 60]}
+              stroke={LABEL_COLOR}
+            />
+            <YAxis domain={[(dataMin) => -dataMin, 0]} stroke={LABEL_COLOR} />
+            <Tooltip />
+            <Legend verticalAlign="top" height={36} iconSize={12} />
+            <ReferenceLine
+              x={30}
+              stroke="#6b7280"
+              strokeDasharray="3 3"
+              label={{ value: "Mi-temps", position: "top" }}
+            />
+            {renderBars("b")}
+            {renderEventMarkers(true)}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

@@ -1,40 +1,44 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { useRapport } from "@/contexts/RapportContext";
 
-// Couleurs premium inspirées du site USDK
 const COLORS = ["#D4AF37", "#1a1a1a"];
 
 export default function EventTypePieChart({ data }) {
+  const { rapport } = useRapport();
+
   const charts = useMemo(() => {
-    const filtreUSDK = (str) =>
-      typeof str === "string" && str.toLowerCase().includes("usdk");
+    if (rapport !== "defensif") return null;
 
     let goals = 0;
     let saves = 0;
     let missed = 0;
 
-    data.forEach((e) => {
-      const res = e.resultat_cthb?.toLowerCase() || "";
-      if (!filtreUSDK(res)) return;
+    data?.forEach((e) => {
+      const res = e.resultat_limoges?.toLowerCase().trim() || "";
 
-      if (res.includes("but")) goals++;
-      else if (res.includes("arrêt")) saves++;
-      else if (res.includes("tir hc")) missed++;
+      if (res === "but encaissé limoges") {
+        goals++;
+      } else if (
+        res === "déf limoges neutralisation" ||
+        res === "déf limoges contré" ||
+        res === "déf limoges arrêt" ||
+        res === "tir arrêté limoges"
+      ) {
+        saves++;
+      } else if (res === "récupération limoges" || res === "tir hc limoges") {
+        missed++;
+      }
     });
 
-    const chartsData = [
+    if (goals + saves + missed === 0) return null;
+
+    return [
       {
         title: "SAVES / GOALS %",
-        subtitle: "Arrêts gardien / Buts encaissés",
+        subtitle: "Arrêts / Buts encaissés",
         data: [
           { name: "Arrêts", value: saves },
           { name: "Buts", value: goals },
@@ -42,16 +46,16 @@ export default function EventTypePieChart({ data }) {
       },
       {
         title: "GOALS / NO GOALS %",
-        subtitle: "Arrêts + tirs hors cadre / Buts encaissés",
+        subtitle: "Arrêts + tirs manqués / Buts encaissés",
         data: [
           { name: "Non-buts", value: saves + missed },
           { name: "Buts", value: goals },
         ],
       },
     ];
+  }, [data, rapport]);
 
-    return chartsData;
-  }, [data]);
+  if (!charts) return null;
 
   return (
     <div className="bg-white rounded-2xl shadow-xl p-6 border border-gray-200 hover:shadow-2xl transition duration-300">

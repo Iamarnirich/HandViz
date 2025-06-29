@@ -6,19 +6,129 @@ import {
   buildStyles,
 } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
+import { useRapport } from "@/contexts/RapportContext";
 
 export default function GaugesPanel({ data }) {
+  const { rapport } = useRapport();
+
   const stats = useMemo(() => {
+    const filtreUSDK = (str) =>
+      typeof str === "string" && str.toLowerCase().includes("usdk");
+
+    if (rapport === "defensif") {
+      let possessionsAdv = 0,
+        butsRecus = 0,
+        apAdv = 0,
+        geAdv = 0,
+        butsAP = 0,
+        butsGE = 0,
+        SupAdv = 0,
+        butsInf = 0,
+        tirDuel = 0,
+        tirDuelSecteurs = 0,
+        tirDuelReussi = 0;
+
+      data.forEach((e) => {
+        const action = e.nom_action?.toLowerCase() || "";
+        const resultat = e.resultat_limoges?.toLowerCase() || "";
+        const secteur = e.secteur?.toLowerCase() || "";
+        const nombre = e.nombre?.toLowerCase() || "";
+
+        const isAdverse =
+          resultat.includes("limoges") || action.includes("limoges");
+
+        if (isAdverse) {
+          if (action.includes("possession limoges")) possessionsAdv++;
+          if (resultat.includes("but limoges")) butsRecus++;
+
+          const isAP = action.includes("attaque limoges");
+          const isGE =
+            action.includes("ca limoges") ||
+            action.includes("er limoges") ||
+            action.includes("mb limoges") ||
+            action.includes("transition limoges");
+
+          if (isAP) {
+            apAdv++;
+            if (resultat.includes("but limoges")) butsAP++;
+          }
+          if (isGE) {
+            geAdv++;
+            if (resultat.includes("but limoges")) butsGE++;
+          }
+
+          if (nombre.includes("supériorité")) {
+            SupAdv++;
+            if (resultat.includes("but limoges")) butsInf++;
+          }
+
+          if (
+            ["aile gauche", "aile droit", "central 6m", "1-2d", "1-2g"].some(
+              (s) => secteur.includes(s)
+            )
+          ) {
+            tirDuelSecteurs++;
+          }
+
+          if (secteur.includes("central 6m")) {
+            tirDuel++;
+            if (resultat.includes("but")) tirDuelReussi++;
+          }
+        }
+      });
+
+      return [
+        {
+          label: "Efficacité déf Globale",
+          value:
+            possessionsAdv > 0 ? (1 - butsRecus / possessionsAdv) * 100 : 0,
+          count: `${possessionsAdv - butsRecus}/${possessionsAdv}`,
+          color: "#D4AF37",
+        },
+        {
+          label: "Efficacité déf Placée",
+          value: apAdv > 0 ? (1 - butsAP / apAdv) * 100 : 0,
+          count: `${apAdv - butsAP}/${apAdv}`,
+          color: "#D4AF37",
+        },
+        {
+          label: "Efficacité déf Grand Espace",
+          value: geAdv > 0 ? (1 - butsGE / geAdv) * 100 : 0,
+          count: `${geAdv - butsGE}/${geAdv}`,
+          color: "#D4AF37",
+        },
+        {
+          label: "Eff. en Inf. Numérique",
+          value: SupAdv > 0 ? (1 - butsInf / SupAdv) * 100 : 0,
+          count: `${SupAdv - butsInf}/${SupAdv}`,
+          color: "#D4AF37",
+        },
+        {
+          label: "% Tirs en Duel reçus",
+          value: apAdv > 0 ? (tirDuelSecteurs / apAdv) * 100 : 0,
+          count: `${tirDuelSecteurs}/${apAdv}`,
+          color: "#D4AF37",
+        },
+        {
+          label: "% Réussite Duel Adv",
+          value: tirDuel > 0 ? (tirDuelReussi / tirDuel) * 100 : 0,
+          count: `${tirDuelReussi}/${tirDuel}`,
+          color: "#D4AF37",
+        },
+      ];
+    }
+
+    // Rapport offensif
     let tirs = 0,
       tirsReussis = 0,
       tirsRates = 0;
     let possessions = 0;
     let attaquesPlacees = 0,
       totalAttaques = 0;
-    let grandespace = 0,
-      getotal = 0;
     let caSuccess = 0,
       caTotal = 0;
+    let grandespace = 0,
+      getotal = 0;
     let engagementRapide = 0;
     let supNumSuccess = 0,
       supNumTotal = 0;
@@ -61,6 +171,7 @@ export default function GaugesPanel({ data }) {
         caTotal++;
         if (resultat.includes("but")) caSuccess++;
       }
+
       if (
         action.includes("ca") ||
         action.includes("er") ||
@@ -100,35 +211,26 @@ export default function GaugesPanel({ data }) {
 
     return [
       {
-        label: "Efficacité globale",
+        label: "EFF %",
         value: possessions > 0 ? (tirs / possessions) * 100 : 0,
         count: `${tirs}/${possessions}`,
         color: "#D4AF37",
       },
       {
-        label: "Efficacité Attaque Placée",
+        label: "% Attaque Placée",
         value: totalAttaques > 0 ? (attaquesPlacees / totalAttaques) * 100 : 0,
         count: `${attaquesPlacees}/${totalAttaques}`,
         color: "#D4AF37",
       },
       {
-        label: "Efficacité Grand Espace",
-        value: caTotal > 0 ? (grandespace / getotal) * 100 : 0,
-        count: `${grandespace}/${getotal}`,
-        color: "#D4AF37",
-      },
-      {
-        label: "Efficacité tirs",
+        label: "EFF Tirs %",
         value: (tirsReussis / (tirsReussis + tirsRates || 1)) * 100,
         count: `${tirsReussis}/${tirsReussis + tirsRates}`,
         color: "#D4AF37",
       },
       {
         label: "Engagement Rapide",
-        value:
-          engagementRapide > 0
-            ? (engagementRapide / engagementRapide) * 100
-            : 0,
+        value: engagementRapide > 0 ? 100 : 0,
         count: `${engagementRapide}/${engagementRapide}`,
         color: "#D4AF37",
       },
@@ -157,7 +259,7 @@ export default function GaugesPanel({ data }) {
         color: "#D4AF37",
       },
     ];
-  }, [data]);
+  }, [data, rapport]);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
@@ -182,9 +284,7 @@ export default function GaugesPanel({ data }) {
             >
               <div className="text-center mt-4">
                 <p className="text-lg font-bold text-gray-900 tracking-wide">
-                  {g.label.includes("er usdk")
-                    ? g.value
-                    : `${g.value.toFixed(0)}%`}
+                  {`${g.value.toFixed(0)}%`}
                 </p>
               </div>
             </CircularProgressbarWithChildren>

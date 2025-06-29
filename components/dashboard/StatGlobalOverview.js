@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   ChartBarIcon,
   XCircleIcon,
@@ -12,189 +12,335 @@ import {
   ClockIcon,
   FingerPrintIcon,
 } from "@heroicons/react/24/solid";
+import { useRapport } from "@/contexts/RapportContext";
 
 export default function StatGlobalOverview({ data }) {
-  const [filtre, setFiltre] = useState("tous");
+  const { rapport } = useRapport();
 
   const stats = useMemo(() => {
     const filtreUSDK = (str) =>
       typeof str === "string" && str.toLowerCase().includes("usdk");
+    const filtreLIMOGES = (str) =>
+      typeof str === "string" && str.toLowerCase().includes("limoges");
 
-    let tirs = 0,
-      tirsRates = 0,
-      buts = 0,
-      pertesBalle = 0,
-      possessions = 0,
-      arrets = 0,
-      neutralisations = 0,
-      deuxMinutes = 0,
-      jets7m = 0;
+    if (rapport === "defensif") {
+      const initStats = () => ({ total: 0, ap: 0, ge: 0 });
+
+      const result = {
+        possessions: initStats(),
+        butsEncaisses: initStats(),
+        arrets: initStats(),
+        tirsHorsCadreAdv: initStats(),
+        tirsContres: initStats(),
+        tirsTotal: initStats(),
+        ballesRecuperees: initStats(),
+        neutralisationsReal: { total: 0 },
+        deuxMinSubies: { total: 0 },
+        septMSubis: { total: 0 },
+        indiceAgressivite: { total: "-" },
+      };
+
+      let butsAP = 0;
+      let neutralAP = 0;
+
+      data.forEach((e) => {
+        const action = e.nom_action?.toLowerCase() || "";
+        const resLimoges = e.resultat_limoges?.toLowerCase() || "";
+
+        const isLIM = filtreLIMOGES(action) || filtreLIMOGES(resLimoges);
+        const isAP = action.includes("attaque limoges");
+        const isGE =
+          action.includes("ca limoges") ||
+          action.includes("er limoges") ||
+          action.includes("mb limoges") ||
+          action.includes("transition limoges");
+
+        if (isLIM) {
+          const inc = (key) => {
+            result[key].total++;
+            if (isAP && result[key].ap !== undefined) result[key].ap++;
+            if (isGE && result[key].ge !== undefined) result[key].ge++;
+          };
+
+          if (action.includes("possession limoges")) inc("possessions");
+          if (resLimoges.includes("but limoges")) {
+            inc("butsEncaisses");
+            if (isAP) butsAP++;
+          }
+          if (resLimoges.includes("tir hc")) inc("tirsHorsCadreAdv");
+
+          if (
+            resLimoges.includes("tir arr") ||
+            resLimoges.includes("tir arret")
+          )
+            inc("arrets");
+          if (
+            resLimoges.includes("but limoges") ||
+            resLimoges.includes("tir contr") ||
+            resLimoges.includes("tir hc") ||
+            resLimoges.includes("tir arr")
+          )
+            inc("tirsTotal");
+
+          if (resLimoges.includes("perte de balle limoges"))
+            inc("ballesRecuperees");
+
+          if (resLimoges.includes("limoges neutralisée")) {
+            result.neutralisationsReal.total++;
+            if (isAP) neutralAP++;
+          }
+
+          if (resLimoges.includes("exclusion limoges"))
+            result.deuxMinSubies.total++;
+          if (resLimoges.includes("7m conc limoges")) result.septMSubis.total++;
+        }
+      });
+
+      result.indiceAgressivite.total =
+        butsAP > 0
+          ? (neutralAP / butsAP).toFixed(2)
+          : neutralAP > 0
+          ? "—"
+          : "—";
+
+      return result;
+    }
+
+    const initStats = () => ({ total: 0, ap: 0, ge: 0 });
+    const globalStats = {
+      tirs: initStats(),
+      tirsRates: initStats(),
+      buts: initStats(),
+      pertesBalle: initStats(),
+      possessions: initStats(),
+      arrets: initStats(),
+      neutralisations: initStats(),
+      deuxMinutes: initStats(),
+      jets7m: initStats(),
+    };
 
     data.forEach((e) => {
       const action = e.nom_action?.toLowerCase() || "";
       const resultat = e.resultat_cthb?.toLowerCase() || "";
-      const possession = e.possession?.toLowerCase() || "";
 
       const isUSDK = filtreUSDK(action) || filtreUSDK(resultat);
-      const isGrandEspace =
+      const isGE =
         action.includes("ca usdk") ||
         action.includes("er usdk") ||
         action.includes("mb usdk") ||
         action.includes("transition usdk");
-      const isAttaquePlacee = action.includes("attaque usdk");
+      const isAP = action.includes("attaque usdk");
 
-      const filtreActif =
-        filtre === "tous" ||
-        (filtre === "grand-espace" && isGrandEspace) ||
-        (filtre === "attaque-placee" && isAttaquePlacee);
+      const inc = (key) => {
+        globalStats[key].total++;
+        if (isAP) globalStats[key].ap++;
+        if (isGE) globalStats[key].ge++;
+      };
 
-      if (isUSDK && filtreActif) {
-        if (resultat.includes("tir hc")) tirs++;
+      if (isUSDK) {
+        if (resultat.includes("tir hc")) inc("tirs");
         if (resultat.includes("tir contr") || resultat.includes("tir arrêt"))
-          tirsRates++;
-        if (resultat.includes("but usdk")) buts++;
-        if (resultat.includes("perte de balle usdk")) pertesBalle++;
-        if (action.includes("possession usdk")) possessions++;
-
-        if (resultat.includes("arret")) arrets++;
-        if (resultat.includes("usdk neutralisée")) neutralisations++;
-        if (resultat.includes("2' obtenu")) deuxMinutes++;
-        if (resultat.includes("7m obtenu usdk")) jets7m++;
+          inc("tirsRates");
+        if (resultat.includes("but usdk")) inc("buts");
+        if (resultat.includes("perte de balle usdk")) inc("pertesBalle");
+        if (action.includes("possession usdk")) inc("possessions");
+        if (resultat.includes("arret")) inc("arrets");
+        if (resultat.includes("usdk neutralisée")) inc("neutralisations");
+        if (resultat.includes("2' obtenu")) inc("deuxMinutes");
+        if (resultat.includes("7m obtenu usdk")) inc("jets7m");
       }
     });
 
-    return {
-      tirs,
-      tirsRates,
-      buts,
-      pertesBalle,
-      possessions,
-      arrets,
-      neutralisations,
-      deuxMinutes,
-      jets7m,
+    const butsAP = globalStats.buts.ap;
+    const neutralisationsAP = globalStats.neutralisations.ap;
+    globalStats.indiceContinuite = {
+      total:
+        neutralisationsAP > 0 ? (butsAP / neutralisationsAP).toFixed(2) : "—",
+      ap: "-",
+      ge: "-",
     };
-  }, [data, filtre]);
 
-  const cards = [
-    {
-      title: "Tirs Hors-Cadre",
-      value: stats.tirs,
-      icon: ChartBarIcon,
-      iconColor: "text-[#D4AF37]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Tirs ratés",
-      value: stats.tirsRates,
-      icon: XCircleIcon,
-      iconColor: "text-[#003366]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Buts",
-      value: stats.buts,
-      icon: CheckCircleIcon,
-      iconColor: "text-[#D4AF37]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Pertes de balle",
-      value: stats.pertesBalle,
-      icon: ArrowTrendingDownIcon,
-      iconColor: "text-[#003366]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Possessions",
-      value: stats.possessions,
-      icon: CursorArrowRippleIcon,
-      iconColor: "text-[#D4AF37]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Arrêts",
-      value: stats.arrets,
-      icon: ShieldCheckIcon,
-      iconColor: "text-[#222]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Neutralisations",
-      value: stats.neutralisations,
-      icon: ExclamationTriangleIcon,
-      iconColor: "text-[#D4AF37]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "2 minutes obtenues",
-      value: stats.deuxMinutes,
-      icon: ClockIcon,
-      iconColor: "text-[#444]",
-      bg: "bg-[#F8F8F8]",
-    },
-    {
-      title: "Jets de 7m obtenus",
-      value: stats.jets7m,
-      icon: FingerPrintIcon,
-      iconColor: "text-[#7E7E7E]",
-      bg: "bg-[#F8F8F8]",
-    },
-  ];
+    return globalStats;
+  }, [data, rapport]);
+
+  const formatSub = (stat) => {
+    if (
+      !stat ||
+      typeof stat.ap === "undefined" ||
+      typeof stat.ge === "undefined"
+    )
+      return null;
+
+    return (
+      <div className="mt-3 flex justify-center gap-6 text-xs font-medium text-gray-700">
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">Att Pla</span>
+          <span className="px-2 py-[1px] rounded-full bg-[#f1f1f1] text-[#333] shadow-sm">
+            {stat.ap}
+          </span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">GE</span>
+          <span className="px-2 py-[1px] rounded-full bg-[#D4AF37] text-[#f1f1f1] shadow-sm">
+            {stat.ge}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const cards = useMemo(() => {
+    if (rapport === "defensif") {
+      return [
+        {
+          title: "Tirs Hors-Cadre",
+          stat: stats.tirsHorsCadreAdv,
+          icon: ChartBarIcon,
+          iconColor: "text-[#D4AF37]",
+        },
+        {
+          title: "Arrêts de GB",
+          stat: stats.arrets,
+          icon: ShieldCheckIcon,
+          iconColor: "text-[#003366]",
+        },
+        {
+          title: "Buts encaissés",
+          stat: stats.butsEncaisses,
+          icon: CheckCircleIcon,
+          iconColor: "text-[#D4AF37]",
+        },
+        {
+          title: "Tirs subis totaux",
+          stat: stats.tirsTotal,
+          icon: ChartBarIcon,
+          iconColor: "text-[#888]",
+        },
+        {
+          title: "Balles récupérées",
+          stat: stats.ballesRecuperees,
+          icon: ArrowTrendingDownIcon,
+          iconColor: "text-[#D4AF37]",
+        },
+        {
+          title: "Possessions",
+          stat: stats.possessions,
+          icon: CursorArrowRippleIcon,
+          iconColor: "text-[#666]",
+        },
+        {
+          title: "Neutralisations réalisées",
+          stat: stats.neutralisationsReal,
+          icon: ExclamationTriangleIcon,
+          iconColor: "text-[#1a1a1a]",
+        },
+        {
+          title: "2 min subies",
+          stat: stats.deuxMinSubies,
+          icon: ClockIcon,
+          iconColor: "text-[#999]",
+        },
+        {
+          title: "7m subis",
+          stat: stats.septMSubis,
+          icon: FingerPrintIcon,
+          iconColor: "text-[#999]",
+        },
+        {
+          title: "Indice d'agressivité",
+          stat: stats.indiceAgressivite,
+          icon: CheckCircleIcon,
+          iconColor: "text-[#444]",
+        },
+      ];
+    }
+
+    return [
+      {
+        title: "Tirs Hors-Cadre",
+        stat: stats.tirs,
+        icon: ChartBarIcon,
+        iconColor: "text-[#D4AF37]",
+      },
+      {
+        title: "Tirs ratés",
+        stat: stats.tirsRates,
+        icon: XCircleIcon,
+        iconColor: "text-[#003366]",
+      },
+      {
+        title: "Buts",
+        stat: stats.buts,
+        icon: CheckCircleIcon,
+        iconColor: "text-[#D4AF37]",
+      },
+      {
+        title: "Pertes de balle",
+        stat: stats.pertesBalle,
+        icon: ArrowTrendingDownIcon,
+        iconColor: "text-[#003366]",
+      },
+      {
+        title: "Possessions",
+        stat: stats.possessions,
+        icon: CursorArrowRippleIcon,
+        iconColor: "text-[#D4AF37]",
+      },
+      {
+        title: "Arrêts",
+        stat: stats.arrets,
+        icon: ShieldCheckIcon,
+        iconColor: "text-[#222]",
+      },
+      {
+        title: "Neutralisations",
+        stat: stats.neutralisations,
+        icon: ExclamationTriangleIcon,
+        iconColor: "text-[#D4AF37]",
+      },
+      {
+        title: "2 minutes obtenues",
+        stat: stats.deuxMinutes,
+        icon: ClockIcon,
+        iconColor: "text-[#444]",
+      },
+      {
+        title: "Jets de 7m obtenus",
+        stat: stats.jets7m,
+        icon: FingerPrintIcon,
+        iconColor: "text-[#7E7E7E]",
+      },
+      {
+        title: "Indice de continuité",
+        stat: stats.indiceContinuite,
+        icon: CheckCircleIcon,
+        iconColor: "text-[#888]",
+      },
+    ];
+  }, [stats, rapport]);
 
   return (
-    <div className="w-full overflow-x-auto py-6">
-      <div className="flex justify-center gap-3 mb-4">
-        <button
-          onClick={() => setFiltre("tous")}
-          className={`px-4 py-1 rounded-full border text-sm font-medium transition ${
-            filtre === "tous"
-              ? "bg-[#D4AF37] text-white"
-              : "bg-white text-[#1a1a1a]"
-          }`}
-        >
-          Tous
-        </button>
-        <button
-          onClick={() => setFiltre("attaque-placee")}
-          className={`px-4 py-1 rounded-full border text-sm font-medium transition ${
-            filtre === "attaque-placee"
-              ? "bg-[#D4AF37] text-white"
-              : "bg-white text-[#1a1a1a]"
-          }`}
-        >
-          Attaque placée
-        </button>
-        <button
-          onClick={() => setFiltre("grand-espace")}
-          className={`px-4 py-1 rounded-full border text-sm font-medium transition ${
-            filtre === "grand-espace"
-              ? "bg-[#D4AF37] text-white"
-              : "bg-white text-[#1a1a1a]"
-          }`}
-        >
-          Grand espace
-        </button>
-      </div>
-      <div className="flex gap-6 justify-center flex-wrap px-4 min-w-max">
-        {cards.map((stat, idx) => {
-          const Icon = stat.icon;
+    <div className="w-full py-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4">
+        {cards.map((card, idx) => {
+          const Icon = card.icon;
           return (
             <div
               key={idx}
-              className="flex justify-between items-center w-[260px] h-[140px] p-5 rounded-2xl shadow-md transition bg-white hover:shadow-xl border border-gray-200 shrink-0"
+              className="w-full bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl shadow hover:shadow-lg transition duration-300 p-4 flex flex-col justify-between"
             >
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${stat.bg}`}>
-                  <Icon className={`h-6 w-6 ${stat.iconColor}`} />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-full bg-[#F8F8F8] shadow-sm">
+                  <Icon className={`h-5 w-5 ${card.iconColor}`} />
                 </div>
-                <h4 className="text-md font-semibold text-gray-800 tracking-wide">
-                  {stat.title}
+                <h4 className="text-sm font-semibold text-gray-800 tracking-wide">
+                  {card.title}
                 </h4>
               </div>
-              <div className="text-4xl font-bold text-right text-[#1a1a1a]">
-                {stat.value}
+              <div className="text-3xl font-extrabold text-[#1a1a1a] text-center">
+                {card.stat?.total ?? "—"}
               </div>
+              <div className="flex justify-center">{formatSub(card.stat)}</div>
             </div>
           );
         })}
