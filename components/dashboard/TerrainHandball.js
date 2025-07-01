@@ -3,16 +3,17 @@
 import Image from "next/image";
 import { useMemo } from "react";
 
+// Positions inversées verticalement (but en haut)
 const secteurs = {
-  ALG: { label: "ALG", top: "92%", left: "10%" },
-  ARG: { label: "ARG", top: "80%", left: "20%" },
-  "Central 6m": { label: "C 6m", top: "60%", left: "50%" },
-  "Central 7-9m": { label: "C 7-9m", top: "35%", left: "50%" },
-  "Central 9m": { label: "C 9m", top: "45%", left: "50%" },
-  ARD: { label: "ARD", top: "80%", left: "80%" },
-  ALD: { label: "ALD", top: "92%", left: "90%" },
-  "1-2G": { label: "1-2G", top: "70%", left: "30%" },
-  "1-2D": { label: "1-2D", top: "70%", left: "70%" },
+  ALG: { label: "Aile gauche", top: "12%", left: "15%" },
+  ARG: { label: "Aile droite", top: "12%", left: "85%" },
+  "1-2G": { label: "6m - À gauche", top: "30%", left: "30%" },
+  "1-2D": { label: "6m - À droite", top: "30%", left: "70%" },
+  "Central 6m": { label: "6m - Central", top: "32%", left: "50%" },
+  "Central 7-9m": { label: "9m - Central", top: "50%", left: "50%" },
+  "Central 9m": { label: "9m - À gauche", top: "50%", left: "30%" },
+  ARD: { label: "9m - À droite", top: "50%", left: "70%" },
+  ALD: { label: "7 mètres", top: "40%", left: "50%" },
 };
 
 export default function TerrainHandball({ data }) {
@@ -24,73 +25,54 @@ export default function TerrainHandball({ data }) {
       const action = e.nom_action?.toLowerCase() || "";
 
       if (secteur && action.includes("usdk")) {
-        if (!map[secteur]) {
-          map[secteur] = { tirs: 0, buts: 0 };
-        }
+        if (!map[secteur]) map[secteur] = { tirs: 0, buts: 0 };
         map[secteur].tirs++;
-        if (resultat.includes("but")) {
-          map[secteur].buts++;
-        }
+        if (resultat.includes("but")) map[secteur].buts++;
       }
     });
     return map;
   }, [data]);
 
   const getColor = (eff) => {
-    if (eff >= 75) return "bg-green-500/90";
-    if (eff >= 60) return "bg-yellow-400/90";
-    if (eff >= 30) return "bg-orange-400/90";
-    return "bg-red-500/90";
+    if (eff >= 75) return "bg-[#D4AF37]";
+    if (eff >= 60) return "bg-yellow-300";
+    if (eff >= 30) return "bg-orange-400";
+    return "bg-gray-500";
   };
-
-  const getSize = (count, max) => {
-    if (!max) return "scale-75";
-    const ratio = count / max;
-    if (ratio > 0.8) return "scale-125";
-    if (ratio > 0.6) return "scale-110";
-    if (ratio > 0.3) return "scale-100";
-    return "scale-90";
-  };
-
-  const maxTirs = Math.max(
-    ...Object.values(statsBySecteur).map((v) => v.tirs),
-    1
-  );
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto rounded-xl overflow-hidden shadow-xl border bg-white">
+    <div className="relative w-full h-full max-h-[500px] rounded-xl overflow-hidden shadow-lg border bg-white">
       <Image
         src="/terrainHandball.png"
-        alt="Demi-terrain de handball"
-        width={500}
-        height={300}
-        className="w-full h-auto object-contain brightness-[0.95]"
+        alt="Demi-terrain"
+        fill
+        className="object-contain"
       />
 
       {Object.entries(secteurs).map(([key, pos]) => {
         const stats = statsBySecteur[key];
         if (!stats || stats.tirs === 0) return null;
+
         const eff = (stats.buts / stats.tirs) * 100;
         const bg = getColor(eff);
-        const size = getSize(stats.tirs, maxTirs);
 
         return (
           <div
             key={key}
-            className={`absolute text-xs font-semibold text-white px-2 py-1 rounded-lg shadow-lg backdrop-blur-sm text-center transition-transform duration-300 ${bg} ${size}`}
+            className={`absolute px-3 py-2 rounded-xl text-white text-[10px] font-medium text-center shadow-lg ${bg}`}
             style={{
               top: pos.top,
               left: pos.left,
               transform: "translate(-50%, -50%)",
+              minWidth: "70px",
             }}
           >
-            <div className="text-[11px] font-bold leading-tight">
+            <div className="text-[11px] font-bold leading-tight mb-1">
               {pos.label}
             </div>
-            <div className="text-[10px]">
-              {stats.buts}/{stats.tirs}
+            <div className="text-[10px] leading-tight">
+              {stats.buts}/{stats.tirs} - {eff.toFixed(0)}%
             </div>
-            <div className="text-[10px] italic">{eff.toFixed(0)}%</div>
           </div>
         );
       })}

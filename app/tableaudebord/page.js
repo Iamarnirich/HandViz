@@ -108,12 +108,14 @@ function DashboardLayout() {
 
       {!showHistorique && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start md:items-stretch min-h-[500px]">
             <div className="h-full">
               <StatGlobalOverview data={filteredEvents} matchId={matchId} />
             </div>
-            <div className="flex items-center justify-center h-full">
-              <TerrainHandBall data={filteredEvents} />
+            <div className="h-full flex items-stretch mt-[22px]">
+              <div className="w-full h-full">
+                <TerrainHandBall data={filteredEvents} />
+              </div>
             </div>
           </div>
 
