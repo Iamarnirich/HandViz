@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   BarChart,
   Bar,
@@ -138,72 +139,84 @@ export default function ProgressionTirsChart({ data }) {
     ));
 
   return (
-    <div className="w-full flex flex-col gap-16 px-8 max-w-6xl mx-auto">
-      {/* Timeline offensive */}
-      <div>
-        <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
-          Timeline Offensif – Buts marqués
-        </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={offensif} margin={{ top: 20, bottom: 30 }}>
-            <XAxis
-              dataKey="minute"
-              ticks={[0, 10, 20, 30, 40, 50, 60]}
-              stroke={LABEL_COLOR}
-            />
-            <YAxis
-              stroke={LABEL_COLOR}
-              domain={[0, maxY]}
-              allowDecimals={false}
-            />
-            <Tooltip />
-            <Legend verticalAlign="top" height={36} iconSize={12} />
-            <ReferenceLine
-              x={30}
-              stroke="#6b7280"
-              strokeDasharray="3 3"
-              label={{ value: "Mi-temps", position: "top" }}
-            />
-            {renderBars("a")}
-            {renderEventMarkers(false)}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+    <motion.div
+      className="w-full flex flex-col gap-16 px-8 max-w-6xl mx-auto"
+      initial={{ opacity: 0, y: 50 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+    >
+      <div className="hover:scale-[1.02] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)] transition-transform duration-300 bg-white p-4 rounded-xl border border-gray-200">
+        {/* Timeline offensive */}
+        <div>
+          <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
+            Timeline Offensif – Buts marqués
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={offensif} margin={{ top: 20, bottom: 30 }}>
+              <XAxis
+                dataKey="minute"
+                ticks={[0, 10, 20, 30, 40, 50, 60]}
+                stroke={LABEL_COLOR}
+              />
+              <YAxis
+                stroke={LABEL_COLOR}
+                domain={[0, maxY]}
+                allowDecimals={false}
+              />
+              <Tooltip />
+              <Legend verticalAlign="top" height={36} iconSize={12} />
+              <ReferenceLine
+                x={30}
+                stroke="#6b7280"
+                strokeDasharray="3 3"
+                label={{ value: "Mi-temps", position: "top" }}
+              />
+              {renderBars("a")}
+              {renderEventMarkers(false)}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
 
-      {/* Timeline défensive */}
-      <div>
-        <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
-          Timeline Défensif – Buts encaissés
-        </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={defensif} margin={{ top: 20, bottom: 30 }}>
-            <XAxis
-              dataKey="minute"
-              ticks={[0, 10, 20, 30, 40, 50, 60]}
-              stroke={LABEL_COLOR}
-              orientation="top"
-              axisLine={false}
-            />
-            <YAxis
-              stroke={LABEL_COLOR}
-              domain={[0, maxY]}
-              reversed
-              allowDecimals={false}
-            />
-            <ReferenceLine y={0} stroke="#6b7280" strokeWidth={1.2} />
-            <Tooltip />
-            <Legend verticalAlign="bottom" height={26} iconSize={12} />
-            <ReferenceLine
-              x={30}
-              stroke="#6b7280"
-              strokeDasharray="3 3"
-              label={{ value: "Mi-temps", position: "bottom" }}
-            />
-            {renderBars("b")}
-            {renderEventMarkers(true)}
-          </BarChart>
-        </ResponsiveContainer>
+        {/* Timeline défensive */}
+        <div>
+          <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
+            Timeline Défensif – Buts encaissés
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={defensif} margin={{ top: 20, bottom: 30 }}>
+              <XAxis
+                dataKey="minute"
+                ticks={[0, 10, 20, 30, 40, 50, 60]}
+                stroke={LABEL_COLOR}
+                orientation="top"
+                axisLine={false}
+              />
+              <YAxis
+                stroke={LABEL_COLOR}
+                domain={[0, maxY]}
+                reversed
+                allowDecimals={false}
+              />
+              <ReferenceLine y={0} stroke="#6b7280" strokeWidth={1.2} />
+              <Tooltip />
+              <Legend
+                verticalAlign="bottom"
+                height={50}
+                iconSize={12}
+                wrapperStyle={{ marginTop: 30 }}
+              />
+              <ReferenceLine
+                x={30}
+                stroke="#6b7280"
+                strokeDasharray="3 3"
+                label={{ value: "Mi-temps", position: "bottom", dy: -10 }}
+              />
+              {renderBars("b")}
+              {renderEventMarkers(true)}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
