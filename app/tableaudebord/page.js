@@ -7,6 +7,8 @@ import UtilisationSecteursChart from "@/components/dashboard/UtilisationSecteurs
 import ProgressionTirsChart from "@/components/dashboard/ProgressionTirsChart";
 import TerrainHandBall from "@/components/dashboard/TerrainHandball";
 import GaugesPanel from "@/components/dashboard/GaugesPanel";
+import GaugesWithChart from "@/components/dashboard/GaugesWithChart";
+
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
 
@@ -112,18 +114,35 @@ function DashboardLayout() {
             <div className="h-full">
               <StatGlobalOverview data={filteredEvents} matchId={matchId} />
             </div>
-            <div className="h-full flex items-stretch mt-[22px]">
+            <div className="h-full flex items-stretch mt-[23px]">
               <div className="w-full h-full">
                 <TerrainHandBall data={filteredEvents} />
               </div>
             </div>
           </div>
 
-          <GaugesPanel data={filteredEvents} />
+          {/* Jauges gauche, Graphe, Jauges droite */}
+          <div className="w-full flex flex-col lg:flex-row gap-6 items-start justify-center">
+            <div className="flex flex-col gap-4">
+              <GaugesPanel data={filteredEvents} range="left" />
+            </div>
+            <div className="flex-1">
+              <UtilisationSecteursChart data={filteredEvents} />
+            </div>
+            <div className="flex flex-col gap-4">
+              <GaugesPanel data={filteredEvents} range="right" />
+            </div>
+          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Jauges du bas bien centrées */}
+          <div className="w-full flex justify-center mt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-md w-full">
+              <GaugesPanel data={filteredEvents} range="bottom" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
             <EventTypePieChart data={filteredEvents} />
-            <UtilisationSecteursChart data={filteredEvents} />
           </div>
         </>
       )}

@@ -8,7 +8,7 @@ import {
 import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
 
-export default function GaugesPanel({ data }) {
+export default function GaugesPanel({ data, range = "all" }) {
   const { rapport } = useRapport();
 
   const stats = useMemo(() => {
@@ -260,36 +260,46 @@ export default function GaugesPanel({ data }) {
       },
     ];
   }, [data, rapport]);
+  const displayedStats = useMemo(() => {
+    if (range === "left") return stats.slice(0, 3);
+    if (range === "right") return stats.slice(3, 6);
+    if (range === "bottom") return stats.slice(6, 8);
+    return stats;
+  }, [stats, range]);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
-      {stats.map((g, idx) => (
+    <div
+      className={`grid gap-4 ${
+        range === "bottom"
+          ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+          : "grid-cols-1"
+      }`}
+    >
+      {displayedStats.map((g, idx) => (
         <div
           key={idx}
-          className="bg-white shadow-lg rounded-2xl p-4 flex flex-col items-center justify-center hover:scale-[1.02] transition duration-300 ease-in-out"
+          className="bg-white shadow-md border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center"
         >
           <p className="text-sm text-gray-500 font-medium mb-2">{g.count}</p>
-          <div className="w-36 h-18 relative">
+          <div className="w-24 h-24 relative">
             <CircularProgressbarWithChildren
               value={g.value}
               maxValue={100}
+              circleRatio={0.5}
               styles={buildStyles({
                 rotation: 0.75,
-                strokeLinecap: "round",
-                trailColor: "#1a1a1a",
+                trailColor: "#eee",
                 pathColor: g.color,
-                textColor: "#1f2937",
+                textColor: "#333",
+                strokeLinecap: "round",
               })}
-              circleRatio={0.5}
             >
-              <div className="text-center mt-4">
-                <p className="text-lg font-bold text-gray-900 tracking-wide">
-                  {`${g.value.toFixed(0)}%`}
-                </p>
+              <div className="text-xs mt-2 font-semibold text-gray-700">
+                {`${g.value.toFixed(0)}%`}
               </div>
             </CircularProgressbarWithChildren>
           </div>
-          <p className="mt-4 text-sm font-semibold text-gray-700 text-center">
+          <p className="mt-3 text-center text-sm text-gray-800 font-semibold">
             {g.label}
           </p>
         </div>

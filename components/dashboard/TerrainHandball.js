@@ -3,17 +3,17 @@
 import Image from "next/image";
 import { useMemo } from "react";
 
-// Positions inversées verticalement (but en haut)
+// Nouveau positionnement inspiré du schéma fourni
 const secteurs = {
-  ALG: { label: "Aile gauche", top: "12%", left: "15%" },
-  ARG: { label: "Aile droite", top: "12%", left: "85%" },
-  "1-2G": { label: "6m - À gauche", top: "30%", left: "30%" },
-  "1-2D": { label: "6m - À droite", top: "30%", left: "70%" },
-  "Central 6m": { label: "6m - Central", top: "32%", left: "50%" },
-  "Central 7-9m": { label: "9m - Central", top: "50%", left: "50%" },
-  "Central 9m": { label: "9m - À gauche", top: "50%", left: "30%" },
-  ARD: { label: "9m - À droite", top: "50%", left: "70%" },
-  ALD: { label: "7 mètres", top: "40%", left: "50%" },
+  ALG: { label: "Aile gauche", top: "20%", left: "18%" },
+  ALD: { label: "Aile droite", top: "20%", left: "82%" },
+  "1-2G": { label: "6m - À gauche", top: "40%", left: "28%" },
+  "Central 6m": { label: "6m - Central", top: "43%", left: "50%" },
+  "1-2D": { label: "6m - À droite", top: "40%", left: "72%" },
+  "Central 7-9m": { label: "9m - Central", top: "64%", left: "50%" },
+  "Central 9m": { label: "9m - À gauche", top: "60%", left: "18%" },
+  ARD: { label: "9m - À droite", top: "60%", left: "82%" },
+  ARG: { label: "7 mètres", top: "80%", left: "30%" },
 };
 
 export default function TerrainHandball({ data }) {
@@ -34,17 +34,17 @@ export default function TerrainHandball({ data }) {
   }, [data]);
 
   const getColor = (eff) => {
-    if (eff >= 75) return "bg-[#D4AF37]";
-    if (eff >= 60) return "bg-yellow-300";
-    if (eff >= 30) return "bg-orange-400";
-    return "bg-gray-500";
+    if (eff >= 75) return "bg-[#D4AF37]"; // doré
+    if (eff >= 60) return "bg-[#D4AF37]/80";
+    if (eff >= 30) return "bg-[#999999]";
+    return "bg-[#555555]";
   };
 
   return (
-    <div className="relative w-full h-full max-h-[500px] rounded-xl overflow-hidden shadow-lg border bg-white">
+    <div className="relative w-full h-full max-h-[580px] rounded-xl overflow-hidden shadow-lg border bg-white">
       <Image
         src="/terrainHandball.png"
-        alt="Demi-terrain"
+        alt="Demi-terrain inversé"
         fill
         className="object-contain"
       />
@@ -64,7 +64,7 @@ export default function TerrainHandball({ data }) {
               top: pos.top,
               left: pos.left,
               transform: "translate(-50%, -50%)",
-              minWidth: "70px",
+              minWidth: "72px",
             }}
           >
             <div className="text-[11px] font-bold leading-tight mb-1">

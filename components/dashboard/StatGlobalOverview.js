@@ -102,12 +102,11 @@ export default function StatGlobalOverview({ data }) {
 
     const initStats = () => ({ total: 0, ap: 0, ge: 0 });
     const globalStats = {
-      tirs: initStats(),
+      tirsTotal: initStats(),
       tirsRates: initStats(),
       buts: initStats(),
       pertesBalle: initStats(),
       possessions: initStats(),
-      arrets: initStats(),
       neutralisations: { total: 0 },
       deuxMinutes: { total: 0 },
       jets7m: { total: 0 },
@@ -136,8 +135,7 @@ export default function StatGlobalOverview({ data }) {
           if (isGE && globalStats[key].ge !== undefined) globalStats[key].ge++;
         };
 
-        if (resultat.includes("tir hc")) inc("tirs");
-        if (resultat.includes("tir contr") || resultat.includes("tir arrêt"))
+        if (resultat.includes("tir contr") || resultat.includes("tir arrêté"))
           inc("tirsRates");
         if (resultat.includes("but usdk")) {
           inc("buts");
@@ -145,7 +143,13 @@ export default function StatGlobalOverview({ data }) {
         }
         if (resultat.includes("perte de balle usdk")) inc("pertesBalle");
         if (action.includes("possession usdk")) inc("possessions");
-        if (resultat.includes("arret")) inc("arrets");
+        if (
+          resultat.includes("but usdk") ||
+          resultat.includes("tir contr") ||
+          resultat.includes("tir hc") ||
+          resultat.includes("tir arrêté")
+        )
+          inc("tirsTotal");
 
         if (resultat.includes("usdk neutralisée")) {
           globalStats.neutralisations.total++;
@@ -222,7 +226,7 @@ export default function StatGlobalOverview({ data }) {
         title: "Tirs subis totaux",
         stat: stats.tirsTotal,
         icon: ChartBarIcon,
-        iconColor: "text-[#888]",
+        iconColor: "text-[#D4AF37]",
       },
       {
         title: "Balles récupérées",
@@ -234,7 +238,7 @@ export default function StatGlobalOverview({ data }) {
         title: "Possessions",
         stat: stats.possessions,
         icon: CursorArrowRippleIcon,
-        iconColor: "text-[#666]",
+        iconColor: "text-[#D4AF37]",
       },
       {
         title: "Neutralisations réalisées",
@@ -264,8 +268,8 @@ export default function StatGlobalOverview({ data }) {
 
     const offs = [
       {
-        title: "Tirs Hors-Cadre",
-        stat: stats.tirs,
+        title: "Tirs total",
+        stat: stats.tirsTotal,
         icon: ChartBarIcon,
         iconColor: "text-[#D4AF37]",
       },
@@ -292,12 +296,6 @@ export default function StatGlobalOverview({ data }) {
         stat: stats.possessions,
         icon: CursorArrowRippleIcon,
         iconColor: "text-[#D4AF37]",
-      },
-      {
-        title: "Arrêts",
-        stat: stats.arrets,
-        icon: ShieldCheckIcon,
-        iconColor: "text-[#222]",
       },
       {
         title: "Neutralisations",
