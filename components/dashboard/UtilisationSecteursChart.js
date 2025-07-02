@@ -76,7 +76,7 @@ export default function UtilisationSecteursChart({ data }) {
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "#222",
+                backgroundColor: "gray",
                 borderRadius: 8,
                 color: "#fff",
               }}

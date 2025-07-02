@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
 import EventTypePieChart from "@/components/dashboard/EventTypePieChart";
 import UtilisationSecteursChart from "@/components/dashboard/UtilisationSecteursChart";
 import ProgressionTirsChart from "@/components/dashboard/ProgressionTirsChart";
 import TerrainHandBall from "@/components/dashboard/TerrainHandball";
 import GaugesPanel from "@/components/dashboard/GaugesPanel";
-import GaugesWithChart from "@/components/dashboard/GaugesWithChart";
-
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
 
@@ -68,6 +67,39 @@ function DashboardLayout() {
         </select>
       </div>
 
+      {/* Bloc de présentation du match */}
+      {matchId && (
+        <div className="mt-2 flex items-center justify-center gap-4">
+          {/* Logo équipe locale */}
+          <Image
+            src="/logoUSDK.png"
+            alt="Logo USDK"
+            width={40}
+            height={40}
+            className="object-contain w-10 h-10"
+          />
+
+          {/* Infos match */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600 font-semibold">
+              J1 – 27/04/2025
+            </p>
+            <p className="text-lg font-bold text-gray-800">
+              USDK Dunkerque vs Limoges
+            </p>
+          </div>
+
+          {/* Logo équipe adverse */}
+          <Image
+            src="/logoLimoges.png"
+            alt="Logo Limoges"
+            width={40}
+            height={40}
+            className="object-contain w-10 h-10"
+          />
+        </div>
+      )}
+
       {/* Rapport filter + historique toggle */}
       <div className="flex justify-center gap-3 mb-6">
         <button
@@ -121,31 +153,32 @@ function DashboardLayout() {
             </div>
           </div>
 
-          {/* Jauges gauche, Graphe, Jauges droite */}
-          <div className="w-full flex flex-col lg:flex-row gap-6 items-start justify-center">
+          {/* Gauges + UtilisationSecteurs */}
+          <div className="w-full flex flex-col lg:flex-row gap-3 items-start justify-center">
             <div className="flex flex-col gap-4">
               <GaugesPanel data={filteredEvents} range="left" />
+              <GaugesPanel data={filteredEvents} range="bottom-left" />
             </div>
-            <div className="flex-1">
-              <UtilisationSecteursChart data={filteredEvents} />
+            <div className="flex-1 flex justify-center items-start mt-10">
+              <div className="w-full max-w-4xl scale-[0.95]">
+                <UtilisationSecteursChart data={filteredEvents} />
+              </div>
             </div>
             <div className="flex flex-col gap-4">
               <GaugesPanel data={filteredEvents} range="right" />
+              <GaugesPanel data={filteredEvents} range="bottom-right" />
             </div>
           </div>
 
-          {/* Jauges du bas bien centrées */}
-          <div className="w-full flex justify-center mt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-md w-full">
-              <GaugesPanel data={filteredEvents} range="bottom" />
+          {/* Pie chart centré */}
+          <div className="w-full flex justify-center">
+            <div className="grid grid-cols-1 gap-6 mt-8 w-full max-w-3xl px-4">
+              <EventTypePieChart data={filteredEvents} />
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-            <EventTypePieChart data={filteredEvents} />
           </div>
         </>
       )}
+
       {showHistorique && (
         <div className="w-full flex flex-col items-center justify-center space-y-12">
           <div className="w-full max-w-6xl">

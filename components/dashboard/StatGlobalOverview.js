@@ -189,12 +189,12 @@ export default function StatGlobalOverview({ data }) {
     return (
       <div className="mt-3 flex justify-center gap-10 text-xs font-medium text-gray-700">
         <div className="flex flex-col items-center">
-          <span className="text-gray-500">Att Pla</span>
-          <span className="mt-1 text-sm font-bold text-[#333]">{stat.ap}</span>
+          <span className="text-gray-500">AP</span>
+          <span className="mt-1 text-2xl font-bold text-[#333]">{stat.ap}</span>
         </div>
         <div className="flex flex-col items-center">
           <span className="text-gray-500">GE</span>
-          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+          <span className="mt-1 text-2xl font-bold text-[#D4AF37]">
             {stat.ge}
           </span>
         </div>
@@ -334,7 +334,7 @@ export default function StatGlobalOverview({ data }) {
           return (
             <div
               key={idx}
-              className="w-full bg-white border border-gray-200 rounded-2xl shadow-lg hover:shadow-xl transition duration-300 p-6 flex flex-col justify-between aspect-[3/1.3]"
+              className="w-full bg-white border border-[#E4CDA1] rounded-2xl shadow-lg transition duration-300 p-6 flex flex-col justify-between aspect-[3/1.3] hover:scale-[1.03] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)]"
             >
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 rounded-full bg-gray-50 shadow-sm">

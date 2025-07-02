@@ -11,7 +11,6 @@ import {
   ReferenceLine,
   ReferenceDot,
   Legend,
-  Label,
 } from "recharts";
 
 const LABEL_COLOR = "#1a1a1a";
@@ -29,10 +28,11 @@ function extractMinuteFromMillis(ms) {
 }
 
 export default function ProgressionTirsChart({ data }) {
-  const { offensif, defensif, events } = useMemo(() => {
+  const { offensif, defensif, events, maxY } = useMemo(() => {
     const off = {},
       def = {},
       evts = [];
+    let max = 0;
 
     data.forEach((e) => {
       const resCTHB = e.resultat_cthb?.toLowerCase() || "";
@@ -44,6 +44,7 @@ export default function ProgressionTirsChart({ data }) {
       const addTo = (store, phaseKey) => {
         if (!store[minute]) store[minute] = {};
         store[minute][phaseKey] = (store[minute][phaseKey] || 0) + 1;
+        max = Math.max(max, store[minute][phaseKey]);
       };
 
       if (resCTHB.includes("but usdk")) {
@@ -89,6 +90,7 @@ export default function ProgressionTirsChart({ data }) {
       offensif: formatData(off),
       defensif: formatData(def),
       events: evts,
+      maxY: max + 1,
     };
   }, [data]);
 
@@ -111,7 +113,7 @@ export default function ProgressionTirsChart({ data }) {
       <ReferenceDot
         key={idx + (isDefensif ? "d" : "o")}
         x={ev.minute}
-        y={isDefensif ? -0.5 : 0.5}
+        y={isDefensif ? maxY - 0.5 : 0.5}
         r={6}
         fill={
           ev.type === "tto"
@@ -149,7 +151,11 @@ export default function ProgressionTirsChart({ data }) {
               ticks={[0, 10, 20, 30, 40, 50, 60]}
               stroke={LABEL_COLOR}
             />
-            <YAxis stroke={LABEL_COLOR} allowDecimals={false} />
+            <YAxis
+              stroke={LABEL_COLOR}
+              domain={[0, maxY]}
+              allowDecimals={false}
+            />
             <Tooltip />
             <Legend verticalAlign="top" height={36} iconSize={12} />
             <ReferenceLine
@@ -175,15 +181,23 @@ export default function ProgressionTirsChart({ data }) {
               dataKey="minute"
               ticks={[0, 10, 20, 30, 40, 50, 60]}
               stroke={LABEL_COLOR}
+              orientation="top"
+              axisLine={false}
             />
-            <YAxis domain={[(dataMin) => -dataMin, 0]} stroke={LABEL_COLOR} />
+            <YAxis
+              stroke={LABEL_COLOR}
+              domain={[0, maxY]}
+              reversed
+              allowDecimals={false}
+            />
+            <ReferenceLine y={0} stroke="#6b7280" strokeWidth={1.2} />
             <Tooltip />
-            <Legend verticalAlign="top" height={36} iconSize={12} />
+            <Legend verticalAlign="bottom" height={26} iconSize={12} />
             <ReferenceLine
               x={30}
               stroke="#6b7280"
               strokeDasharray="3 3"
-              label={{ value: "Mi-temps", position: "top" }}
+              label={{ value: "Mi-temps", position: "bottom" }}
             />
             {renderBars("b")}
             {renderEventMarkers(true)}

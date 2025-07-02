@@ -33,9 +33,8 @@ export default function NavBar() {
       {/* Barre supérieure */}
       <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md shadow px-4 py-3">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          {/* Burger + logo */}
           <div className="flex items-center space-x-4">
-            {connected && (
+            {/* Burger + logo  {connected && (
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
                 className="text-gray-800 focus:outline-none"
@@ -63,7 +62,7 @@ export default function NavBar() {
                   )}
                 </svg>
               </button>
-            )}
+            )} */}
             <Link
               href="/"
               className="text-xl font-semibold text-gray-700 flex items-center space-x-2"
@@ -98,7 +97,7 @@ export default function NavBar() {
         </div>
       </nav>
 
-      {/* Menu déroulant latéral */}
+      {/* Menu déroulant latéral 
       {connected && (
         <div
           className={`fixed top-11 left-0 h-full w-64 bg-white shadow-lg z-[999] transform ${
@@ -120,7 +119,7 @@ export default function NavBar() {
             </Link>
           </nav>
         </div>
-      )}
+      )} */}
     </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import {
   CircularProgressbarWithChildren,
   buildStyles,
@@ -263,46 +264,51 @@ export default function GaugesPanel({ data, range = "all" }) {
   const displayedStats = useMemo(() => {
     if (range === "left") return stats.slice(0, 3);
     if (range === "right") return stats.slice(3, 6);
-    if (range === "bottom") return stats.slice(6, 8);
+    if (range === "bottom-left") return stats.slice(6, 7);
+    if (range === "bottom-right") return stats.slice(7, 8);
     return stats;
   }, [stats, range]);
 
   return (
     <div
-      className={`grid gap-4 ${
-        range === "bottom"
-          ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+      className={`grid gap-6 ${
+        range === "bottom-left" || range === "bottom-right"
+          ? "grid-cols-1"
           : "grid-cols-1"
       }`}
     >
       {displayedStats.map((g, idx) => (
-        <div
+        <motion.div
           key={idx}
-          className="bg-white shadow-md border border-gray-200 rounded-2xl p-4 flex flex-col items-center justify-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: idx * 0.1, duration: 0.4 }}
+          className="bg-[#ffffff] border border-[#E4CDA1] rounded-2xl p-4 w-full max-w-[190px] flex flex-col items-center shadow transition-transform duration-300 hover:scale-[1.03] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)]"
         >
-          <p className="text-sm text-gray-500 font-medium mb-2">{g.count}</p>
-          <div className="w-24 h-24 relative">
+          <p className="text-[13px] text-gray-700 font-semibold mb-1 tracking-wide">
+            {g.count}
+          </p>
+          <div className="w-24 h-24">
             <CircularProgressbarWithChildren
               value={g.value}
               maxValue={100}
               circleRatio={0.5}
               styles={buildStyles({
                 rotation: 0.75,
-                trailColor: "#eee",
+                trailColor: "#f0f0f0",
                 pathColor: g.color,
-                textColor: "#333",
                 strokeLinecap: "round",
               })}
             >
-              <div className="text-xs mt-2 font-semibold text-gray-700">
+              <div className="text-sm mt-3 font-bold text-[#1a1a1a]">
                 {`${g.value.toFixed(0)}%`}
               </div>
             </CircularProgressbarWithChildren>
           </div>
-          <p className="mt-3 text-center text-sm text-gray-800 font-semibold">
+          <p className="mt-3 text-[12px] text-center font-medium text-gray-800 leading-snug">
             {g.label}
           </p>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
