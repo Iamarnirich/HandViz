@@ -271,7 +271,7 @@ export default function GaugesPanel({ data, range = "all" }) {
 
   return (
     <div
-      className={`grid gap-6 ${
+      className={`grid gap-4 ${
         range === "bottom-left" || range === "bottom-right"
           ? "grid-cols-1"
           : "grid-cols-1"
@@ -305,7 +305,7 @@ export default function GaugesPanel({ data, range = "all" }) {
               </div>
             </CircularProgressbarWithChildren>
           </div>
-          <p className="mt-3 text-[12px] text-center font-medium text-gray-800 leading-snug">
+          <p className="mt-1 text-[12px] text-center font-medium text-gray-800 leading-snug">
             {g.label}
           </p>
         </motion.div>

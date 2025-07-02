@@ -91,7 +91,7 @@ function DashboardLayout() {
 
           {/* Logo équipe adverse */}
           <Image
-            src="/logoLimoges.png"
+            src="/logolimoges.png"
             alt="Logo Limoges"
             width={40}
             height={40}
@@ -154,8 +154,8 @@ function DashboardLayout() {
           </div>
 
           {/* Gauges + UtilisationSecteurs */}
-          <div className="w-full flex flex-col lg:flex-row gap-3 items-start justify-center">
-            <div className="flex flex-col gap-4">
+          <div className="w-full flex flex-col lg:flex-row gap-2 items-start justify-center">
+            <div className="flex flex-col gap-6">
               <GaugesPanel data={filteredEvents} range="left" />
               <GaugesPanel data={filteredEvents} range="bottom-left" />
             </div>
@@ -164,7 +164,7 @@ function DashboardLayout() {
                 <UtilisationSecteursChart data={filteredEvents} />
               </div>
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-6">
               <GaugesPanel data={filteredEvents} range="right" />
               <GaugesPanel data={filteredEvents} range="bottom-right" />
             </div>
