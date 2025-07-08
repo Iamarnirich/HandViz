@@ -6,8 +6,11 @@ import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
 import EventTypePieChart from "@/components/dashboard/EventTypePieChart";
 import UtilisationSecteursChart from "@/components/dashboard/UtilisationSecteursChart";
 import ProgressionTirsChart from "@/components/dashboard/ProgressionTirsChart";
+import TimelineChart from "@/components/dashboard/TimelineChart";
 import TerrainHandBall from "@/components/dashboard/TerrainHandball";
 import GaugesPanel from "@/components/dashboard/GaugesPanel";
+import ImpactGrid from "@/components/dashboard/ImpactGrid";
+
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
 
@@ -142,12 +145,16 @@ function DashboardLayout() {
 
       {!showHistorique && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start md:items-stretch min-h-[500px]">
-            <div className="h-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <div className="h-full flex flex-col gap-6">
               <StatGlobalOverview data={filteredEvents} matchId={matchId} />
+              <div className="w-full flex justify-center">
+                <TimelineChart data={filteredEvents} />
+              </div>
             </div>
-            <div className="h-full flex items-stretch mt-[23px]">
-              <div className="w-full h-full">
+            <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
+              <ImpactGrid data={filteredEvents} />
+              <div className="w-full max-w-3xl aspect-[3/3]">
                 <TerrainHandBall data={filteredEvents} />
               </div>
             </div>

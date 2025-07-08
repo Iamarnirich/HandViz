@@ -205,9 +205,15 @@ export default function StatGlobalOverview({ data }) {
   const cards = useMemo(() => {
     const defs = [
       {
-        title: "Tirs Hors-Cadre",
-        stat: stats.tirsHorsCadreAdv,
-        icon: ChartBarIcon,
+        title: "Possessions",
+        stat: stats.possessions,
+        icon: CursorArrowRippleIcon,
+        iconColor: "text-[#D4AF37]",
+      },
+      {
+        title: "Buts encaissés",
+        stat: stats.butsEncaisses,
+        icon: CheckCircleIcon,
         iconColor: "text-[#D4AF37]",
       },
       {
@@ -217,14 +223,8 @@ export default function StatGlobalOverview({ data }) {
         iconColor: "text-[#003366]",
       },
       {
-        title: "Buts encaissés",
-        stat: stats.butsEncaisses,
-        icon: CheckCircleIcon,
-        iconColor: "text-[#D4AF37]",
-      },
-      {
-        title: "Tirs subis totaux",
-        stat: stats.tirsTotal,
+        title: "Tirs Hors-Cadre",
+        stat: stats.tirsHorsCadreAdv,
         icon: ChartBarIcon,
         iconColor: "text-[#D4AF37]",
       },
@@ -235,11 +235,12 @@ export default function StatGlobalOverview({ data }) {
         iconColor: "text-[#D4AF37]",
       },
       {
-        title: "Possessions",
-        stat: stats.possessions,
-        icon: CursorArrowRippleIcon,
+        title: "Total tirs reçus",
+        stat: stats.tirsTotal,
+        icon: ChartBarIcon,
         iconColor: "text-[#D4AF37]",
       },
+
       {
         title: "Neutralisations réalisées",
         stat: stats.neutralisationsReal,
@@ -268,19 +269,13 @@ export default function StatGlobalOverview({ data }) {
 
     const offs = [
       {
-        title: "Tirs total",
-        stat: stats.tirsTotal,
-        icon: ChartBarIcon,
+        title: "Possessions",
+        stat: stats.possessions,
+        icon: CursorArrowRippleIcon,
         iconColor: "text-[#D4AF37]",
       },
       {
-        title: "Tirs ratés",
-        stat: stats.tirsRates,
-        icon: XCircleIcon,
-        iconColor: "text-[#003366]",
-      },
-      {
-        title: "Buts",
+        title: "Buts marqués",
         stat: stats.buts,
         icon: CheckCircleIcon,
         iconColor: "text-[#D4AF37]",
@@ -292,9 +287,15 @@ export default function StatGlobalOverview({ data }) {
         iconColor: "text-[#003366]",
       },
       {
-        title: "Possessions",
-        stat: stats.possessions,
-        icon: CursorArrowRippleIcon,
+        title: "Tirs ratés",
+        stat: stats.tirsRates,
+        icon: XCircleIcon,
+        iconColor: "text-[#003366]",
+      },
+      {
+        title: "Tirs total",
+        stat: stats.tirsTotal,
+        icon: ChartBarIcon,
         iconColor: "text-[#D4AF37]",
       },
       {
@@ -310,7 +311,7 @@ export default function StatGlobalOverview({ data }) {
         iconColor: "text-[#444]",
       },
       {
-        title: "Jets de 7m obtenus",
+        title: "7m obtenus",
         stat: stats.jets7m,
         icon: FingerPrintIcon,
         iconColor: "text-[#7E7E7E]",
