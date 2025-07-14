@@ -166,14 +166,19 @@ function DashboardLayout() {
               <GaugesPanel data={filteredEvents} range="left" />
               <GaugesPanel data={filteredEvents} range="bottom-left" />
             </div>
-            <div className="flex-1 flex justify-center items-start mt-10">
+            <div className="flex-1 flex flex-col items-center mt-10">
               <div className="w-full max-w-4xl scale-[0.95]">
                 <UtilisationSecteursChart data={filteredEvents} />
               </div>
+              <div className="flex justify-center mt-4">
+                <div className="flex gap-6">
+                  <GaugesPanel data={filteredEvents} range="bottom-right" />
+                </div>
+              </div>
             </div>
+
             <div className="flex flex-col gap-6">
               <GaugesPanel data={filteredEvents} range="right" />
-              <GaugesPanel data={filteredEvents} range="bottom-right" />
             </div>
           </div>
 

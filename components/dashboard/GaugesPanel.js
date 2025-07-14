@@ -272,9 +272,7 @@ export default function GaugesPanel({ data, range = "all" }) {
   return (
     <div
       className={`grid gap-4 ${
-        range === "bottom-left" || range === "bottom-right"
-          ? "grid-cols-1"
-          : "grid-cols-1"
+        range === "bottom-right" ? "grid-cols-2" : "grid-cols-1"
       }`}
     >
       {displayedStats.map((g, idx) => (
