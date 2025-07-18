@@ -18,11 +18,11 @@ import { useRapport } from "@/contexts/RapportContext";
 const LABEL_COLOR = "#1a1a1a";
 
 const PHASES = {
-  "attaque placée": { color: "#22c55e", key: "ap" },
-  "contre-attaque": { color: "#ef4444", key: "ca" },
-  "engagement rapide": { color: "#3b82f6", key: "er" },
+  AP: { color: "#22c55e", key: "ap" },
+  CA: { color: "#ef4444", key: "ca" },
+  ER: { color: "#3b82f6", key: "er" },
   transition: { color: "#facc15", key: "tr" },
-  "montée de balle": { color: "#a855f7", key: "mb" },
+  MB: { color: "#a855f7", key: "mb" },
 };
 
 function extractMinuteFromMillis(ms) {
@@ -143,74 +143,64 @@ export default function TimelineChart({ data }) {
 
   return (
     <motion.div
-      className="w-full flex flex-col gap-16 px-8 max-w-6xl mx-auto"
+      className="w-full flex flex-col gap-16 px-4 max-w-[1060px] mx-auto"
       initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
-      {rapport === "offensif" && (
-        <div className="hover:scale-[1.02] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)] transition-transform duration-300 bg-white p-4 rounded-xl border border-gray-200">
-          <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
-            Timeline Offensif – Buts marqués
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={offensif} margin={{ top: 20, bottom: 30 }}>
-              <XAxis
-                dataKey="minute"
-                ticks={[0, 10, 20, 30, 40, 50, 60]}
-                stroke={LABEL_COLOR}
-              />
-              <YAxis
-                stroke={LABEL_COLOR}
-                domain={[0, maxY]}
-                allowDecimals={false}
-              />
-              <Tooltip />
-              <Legend verticalAlign="top" height={36} iconSize={12} />
-              <ReferenceLine
-                x={30}
-                stroke="#6b7280"
-                strokeDasharray="3 3"
-                label={{ value: "Mi-temps", position: "top" }}
-              />
-              {renderBars("a")}
-              {renderEventMarkers(false)}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-6 py-5">
+        <h3 className="text-lg font-bold text-center mb-4 uppercase text-[#1a1a1a]">
+          Timeline{" "}
+          {rapport === "offensif"
+            ? "Offensif – Buts marqués"
+            : "Défensif – Buts encaissés"}
+        </h3>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart
+            data={rapport === "offensif" ? offensif : defensif}
+            margin={{ top: 10, bottom: 50, left: 10, right: 10 }} // 💡 Ajouté + espace pour Legend
+          >
+            <XAxis
+              dataKey="minute"
+              ticks={[0, 10, 20, 30, 40, 50, 60]}
+              stroke={LABEL_COLOR}
+            />
+            <YAxis
+              stroke={LABEL_COLOR}
+              domain={[0, maxY]}
+              allowDecimals={false}
+            />
+            <Tooltip />
 
-      {rapport === "defensif" && (
-        <div className="hover:scale-[1.02] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)] transition-transform duration-300 bg-white p-4 rounded-xl border border-gray-200">
-          <h3 className="text-lg font-semibold text-center text-[#111] mb-4 uppercase">
-            Timeline Défensif – Buts encaissés
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={defensif} margin={{ top: 20, bottom: 30 }}>
-              <XAxis
-                dataKey="minute"
-                ticks={[0, 10, 20, 30, 40, 50, 60]}
-                stroke={LABEL_COLOR}
-              />
-              <YAxis
-                stroke={LABEL_COLOR}
-                domain={[0, maxY]}
-                allowDecimals={false}
-              />
-              <Tooltip />
-              <Legend verticalAlign="top" height={36} iconSize={12} />
-              <ReferenceLine
-                x={30}
-                stroke="#6b7280"
-                strokeDasharray="3 3"
-                label={{ value: "Mi-temps", position: "top" }}
-              />
-              {renderBars("b")}
-              {renderEventMarkers(true)}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+            {/* ✅ Déplacée ici pour plus d’espace haut */}
+            <Legend
+              verticalAlign="bottom"
+              height={40}
+              iconSize={10}
+              wrapperStyle={{ fontSize: "12px", marginTop: "20px" }}
+            />
+
+            {/* ✅ Ligne de mi-temps propre et dégagée */}
+            <ReferenceLine
+              x={30}
+              stroke="#6b7280"
+              strokeDasharray="3 3"
+              label={{
+                value: "Mi-temps",
+                position: "insideTop",
+                dy: -6,
+                fill: "#333",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            />
+
+            {/* ✅ Barres bien espacées */}
+            {renderBars("stack")}
+            {renderEventMarkers(rapport === "defensif")}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </motion.div>
   );
 }

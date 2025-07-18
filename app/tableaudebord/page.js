@@ -10,6 +10,7 @@ import TimelineChart from "@/components/dashboard/TimelineChart";
 import TerrainHandBall from "@/components/dashboard/TerrainHandball";
 import GaugesPanel from "@/components/dashboard/GaugesPanel";
 import ImpactGrid from "@/components/dashboard/ImpactGrid";
+import EnclenchementsTable from "@/components/dashboard/EnclenchementsTable";
 
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
@@ -52,7 +53,7 @@ function DashboardLayout() {
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-120px)] mt-[63px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
+    <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
       {/* Match filter */}
       <div className="flex justify-center mb-4">
         <select
@@ -159,32 +160,34 @@ function DashboardLayout() {
               </div>
             </div>
           </div>
-
-          {/* Gauges + UtilisationSecteurs */}
-          <div className="w-full flex flex-col lg:flex-row gap-2 items-start justify-center">
-            <div className="flex flex-col gap-6">
-              <GaugesPanel data={filteredEvents} range="left" />
-              <GaugesPanel data={filteredEvents} range="bottom-left" />
-            </div>
-            <div className="flex-1 flex flex-col items-center mt-10">
-              <div className="w-full max-w-4xl scale-[0.95]">
-                <UtilisationSecteursChart data={filteredEvents} />
+          {/* Ensemble Gauges + UtilisationSecteurs + Gauges Duel Direct */}
+          <div className="w-full flex flex-col items-center justify-center gap-4 mt-8">
+            <div className="flex flex-row justify-center gap-20 items-start">
+              {/* Gauches */}
+              <div className="flex flex-col gap-5 items-end w-[220px]">
+                <GaugesPanel data={filteredEvents} range="left" />
+                <GaugesPanel data={filteredEvents} range="bottom-left" />
               </div>
-              <div className="flex justify-center mt-4">
-                <div className="flex gap-6">
+
+              {/* Centre avec diagramme + gauges en dessous */}
+              <div className="flex flex-col items-center gap-20 w-full max-w-5xl mt-[80px]">
+                <UtilisationSecteursChart data={filteredEvents} />
+                <div className="flex justify-center gap-8">
                   <GaugesPanel data={filteredEvents} range="bottom-right" />
                 </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-6">
-              <GaugesPanel data={filteredEvents} range="right" />
+              {/* Droites */}
+              <div className="flex flex-col gap-5 items-start w-[220px]">
+                <GaugesPanel data={filteredEvents} range="right" />
+              </div>
             </div>
           </div>
 
           {/* Pie chart centré */}
           <div className="w-full flex justify-center">
             <div className="grid grid-cols-1 gap-6 mt-8 w-full max-w-3xl px-4">
+              <EnclenchementsTable data={filteredEvents} />
               <EventTypePieChart data={filteredEvents} />
             </div>
           </div>

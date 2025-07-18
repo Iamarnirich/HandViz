@@ -4,8 +4,8 @@ import { useMemo } from "react";
 
 const IMPACT_GRID = [
   ["Haut gauche", "Haut milieu", "Haut droite"],
-  ["milieu gauche", "bas milieu", "milieu droite"],
-  ["bas gauche", "milieu", "bas droite"],
+  ["milieu gauche", "milieu", "milieu droite"],
+  ["bas gauche", "bas milieu", "bas droite"],
 ];
 
 const getColor = (eff) => {
@@ -34,7 +34,7 @@ export default function ImpactGrid({ data }) {
   }, [data]);
 
   return (
-    <div className="w-full max-w-xl mx-auto grid grid-cols-3 grid-rows-3 gap-[8px] p-4 bg-white rounded-xl shadow-lg mb-4 scale-95 transition-all">
+    <div className="w-full max-w-3xl mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-xl shadow-lg mb-4">
       {IMPACT_GRID.flat().map((zone, idx) => {
         const stats = impactStats[zone.toLowerCase()] || { tirs: 0, buts: 0 };
         const eff = stats.tirs > 0 ? (stats.buts / stats.tirs) * 100 : 0;
@@ -43,12 +43,9 @@ export default function ImpactGrid({ data }) {
         return (
           <div
             key={idx}
-            className={`aspect-[1.5/1] rounded-lg flex flex-col items-center justify-center text-xs font-semibold ${bg} shadow hover:scale-[1.02] transition-all`}
+            className={`aspect-[2.5/1] rounded-lg flex items-center justify-center text-lg font-extrabold ${bg} shadow hover:scale-[1.02] transition-transform`}
           >
-            <div className="text-[12px] font-bold">
-              {stats.buts} / {stats.tirs}
-            </div>
-            <div className="text-[9px] mt-1 text-center">{zone}</div>
+            {stats.buts} / {stats.tirs}
           </div>
         );
       })}

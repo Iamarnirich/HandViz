@@ -23,17 +23,24 @@ export default function StatGlobalOverview({ data }) {
     const filtreLIMOGES = (str) =>
       typeof str === "string" && str.toLowerCase().includes("limoges");
 
-    if (rapport === "defensif") {
-      const initStats = () => ({ total: 0, ap: 0, ge: 0 });
+    const initPhaseStats = () => ({
+      total: 0,
+      ap: 0,
+      ca: 0,
+      er: 0,
+      mb: 0,
+      jt: 0,
+    });
 
+    if (rapport === "defensif") {
       const result = {
-        possessions: initStats(),
-        butsEncaisses: initStats(),
-        arrets: initStats(),
-        tirsHorsCadreAdv: initStats(),
-        tirsContres: initStats(),
-        tirsTotal: initStats(),
-        ballesRecuperees: initStats(),
+        possessions: initPhaseStats(),
+        butsEncaisses: initPhaseStats(),
+        arrets: initPhaseStats(),
+        tirsHorsCadreAdv: initPhaseStats(),
+        tirsContres: initPhaseStats(),
+        tirsTotal: initPhaseStats(),
+        ballesRecuperees: initPhaseStats(),
         neutralisationsReal: { total: 0 },
         deuxMinSubies: { total: 0 },
         septMSubis: { total: 0 },
@@ -49,17 +56,20 @@ export default function StatGlobalOverview({ data }) {
 
         const isLIM = filtreLIMOGES(action) || filtreLIMOGES(resLimoges);
         const isAP = action.includes("attaque limoges");
-        const isGE =
-          action.includes("ca limoges") ||
-          action.includes("er limoges") ||
-          action.includes("mb limoges") ||
-          action.includes("transition limoges");
+        const phaseKeys = {
+          ca: action.includes("ca limoges"),
+          er: action.includes("er limoges"),
+          mb: action.includes("mb limoges"),
+          jt: action.includes("transition limoges"),
+        };
 
         if (isLIM) {
           const inc = (key) => {
             result[key].total++;
             if (isAP && result[key].ap !== undefined) result[key].ap++;
-            if (isGE && result[key].ge !== undefined) result[key].ge++;
+            Object.entries(phaseKeys).forEach(([k, v]) => {
+              if (v && result[key][k] !== undefined) result[key][k]++;
+            });
           };
 
           if (action.includes("possession limoges")) inc("possessions");
@@ -100,13 +110,12 @@ export default function StatGlobalOverview({ data }) {
       return result;
     }
 
-    const initStats = () => ({ total: 0, ap: 0, ge: 0 });
     const globalStats = {
-      tirsTotal: initStats(),
-      tirsRates: initStats(),
-      buts: initStats(),
-      pertesBalle: initStats(),
-      possessions: initStats(),
+      tirsTotal: initPhaseStats(),
+      tirsRates: initPhaseStats(),
+      buts: initPhaseStats(),
+      pertesBalle: initPhaseStats(),
+      possessions: initPhaseStats(),
       neutralisations: { total: 0 },
       deuxMinutes: { total: 0 },
       jets7m: { total: 0 },
@@ -121,18 +130,21 @@ export default function StatGlobalOverview({ data }) {
       const resultat = e.resultat_cthb?.toLowerCase() || "";
 
       const isUSDK = filtreUSDK(action) || filtreUSDK(resultat);
-      const isGE =
-        action.includes("ca usdk") ||
-        action.includes("er usdk") ||
-        action.includes("mb usdk") ||
-        action.includes("transition usdk");
       const isAP = action.includes("attaque usdk");
+      const phaseKeys = {
+        ca: action.includes("ca usdk"),
+        er: action.includes("er usdk"),
+        mb: action.includes("mb usdk"),
+        jt: action.includes("transition usdk"),
+      };
 
       if (isUSDK) {
         const inc = (key) => {
           globalStats[key].total++;
           if (isAP && globalStats[key].ap !== undefined) globalStats[key].ap++;
-          if (isGE && globalStats[key].ge !== undefined) globalStats[key].ge++;
+          Object.entries(phaseKeys).forEach(([k, v]) => {
+            if (v && globalStats[key][k] !== undefined) globalStats[key][k]++;
+          });
         };
 
         if (resultat.includes("tir contr") || resultat.includes("tir arrêté"))
@@ -167,37 +179,70 @@ export default function StatGlobalOverview({ data }) {
     return globalStats;
   }, [data, rapport]);
 
+  const computeGE = (stat) =>
+    (stat.ca ?? 0) + (stat.er ?? 0) + (stat.mb ?? 0) + (stat.jt ?? 0);
+
   const formatSub = (stat, title) => {
-    if (
-      !stat ||
-      typeof stat.ap === "undefined" ||
-      typeof stat.ge === "undefined"
-    )
-      return null;
+    if (!stat || typeof stat.ap === "undefined") return null;
+
+    const isExtended =
+      (rapport === "offensif" &&
+        ["Buts marqués", "Pertes de balle"].includes(title)) ||
+      (rapport === "defensif" && title === "Buts encaissés");
 
     const skipSubStats =
       rapport === "offensif" &&
       [
         "Neutralisations",
-        "2 minutes obtenues",
-        "Jets de 7m obtenus",
+        "2 Min obtenues",
+        "7 m obtenus",
         "Indice de continuité",
       ].includes(title);
 
     if (skipSubStats) return null;
 
     return (
-      <div className="mt-3 flex justify-center gap-10 text-xs font-medium text-gray-700">
+      <div className="mt-2 flex justify-center gap-4 text-xs font-medium text-gray-700 flex-wrap">
         <div className="flex flex-col items-center">
           <span className="text-gray-500">AP</span>
-          <span className="mt-1 text-2xl font-bold text-[#333]">{stat.ap}</span>
+          <span className="mt-1 text-sm font-bold text-[#333]">{stat.ap}</span>
         </div>
-        <div className="flex flex-col items-center">
-          <span className="text-gray-500">GE</span>
-          <span className="mt-1 text-2xl font-bold text-[#D4AF37]">
-            {stat.ge}
-          </span>
-        </div>
+
+        {isExtended ? (
+          <>
+            <div className="flex flex-col items-center">
+              <span className="text-gray-500">CA</span>
+              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+                {stat.ca ?? 0}
+              </span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-gray-500">ER</span>
+              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+                {stat.er ?? 0}
+              </span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-gray-500">MB</span>
+              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+                {stat.mb ?? 0}
+              </span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-gray-500">JT</span>
+              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+                {stat.jt ?? 0}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center">
+            <span className="text-gray-500">GE</span>
+            <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+              {computeGE(stat)}
+            </span>
+          </div>
+        )}
       </div>
     );
   };
@@ -240,7 +285,6 @@ export default function StatGlobalOverview({ data }) {
         icon: ChartBarIcon,
         iconColor: "text-[#D4AF37]",
       },
-
       {
         title: "Neutralisations réalisées",
         stat: stats.neutralisationsReal,
@@ -290,7 +334,7 @@ export default function StatGlobalOverview({ data }) {
         title: "Tirs ratés",
         stat: stats.tirsRates,
         icon: XCircleIcon,
-        iconColor: "text-[#003366]",
+        iconColor: "text-[red]",
       },
       {
         title: "Tirs total",
@@ -305,22 +349,22 @@ export default function StatGlobalOverview({ data }) {
         iconColor: "text-[#D4AF37]",
       },
       {
-        title: "2 minutes obtenues",
+        title: "2 Min obtenues",
         stat: stats.deuxMinutes,
         icon: ClockIcon,
         iconColor: "text-[#444]",
       },
       {
-        title: "7m obtenus",
+        title: "7 m obtenus",
         stat: stats.jets7m,
         icon: FingerPrintIcon,
-        iconColor: "text-[#7E7E7E]",
+        iconColor: "text-[#D4AF37]",
       },
       {
         title: "Indice de continuité",
         stat: stats.indiceContinuite,
         icon: CheckCircleIcon,
-        iconColor: "text-[#888]",
+        iconColor: "text-[#003366]",
       },
     ];
 
@@ -328,29 +372,31 @@ export default function StatGlobalOverview({ data }) {
   }, [stats, rapport]);
 
   return (
-    <div className="w-full py-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 px-4">
+    <div className="w-full py-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-4 px-4">
         {cards.map((card, idx) => {
           const Icon = card.icon;
           return (
             <div
               key={idx}
-              className="w-full bg-white border border-[#E4CDA1] rounded-2xl shadow-lg transition duration-300 p-6 flex flex-col justify-between aspect-[3/1.3] hover:scale-[1.03] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)]"
+              className="bg-white border border-[#E4CDA1] rounded-xl shadow p-4 min-h-[130px] flex flex-col justify-between items-center hover:scale-[1.02] transition-transform"
             >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 rounded-full bg-gray-50 shadow-sm">
-                  <Icon className={`h-6 w-6 ${card.iconColor}`} />
-                </div>
-                <h4 className="text-sm font-semibold text-gray-800 tracking-wide">
+              <div className="flex items-center gap-2">
+                <Icon className={`h-5 w-5 ${card.iconColor}`} />
+                <h4 className="text-s font-semibold text-gray-700">
                   {card.title}
                 </h4>
               </div>
-              <div className="text-4xl font-extrabold text-[#1a1a1a] text-center">
+              <div
+                className={`text-xl font-extrabold text-[#1a1a1a] text-center ${
+                  !formatSub(card.stat, card.title)
+                    ? "flex-grow flex items-center justify-center"
+                    : ""
+                }`}
+              >
                 {card.stat?.total ?? "—"}
               </div>
-              <div className="flex justify-center">
-                {formatSub(card.stat, card.title)}
-              </div>
+              {formatSub(card.stat, card.title)}
             </div>
           );
         })}
