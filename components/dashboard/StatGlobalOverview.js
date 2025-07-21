@@ -179,16 +179,10 @@ export default function StatGlobalOverview({ data }) {
     return globalStats;
   }, [data, rapport]);
 
-  const computeGE = (stat) =>
-    (stat.ca ?? 0) + (stat.er ?? 0) + (stat.mb ?? 0) + (stat.jt ?? 0);
-
   const formatSub = (stat, title) => {
     if (!stat || typeof stat.ap === "undefined") return null;
 
-    const isExtended =
-      (rapport === "offensif" &&
-        ["Buts marqués", "Pertes de balle"].includes(title)) ||
-      (rapport === "defensif" && title === "Buts encaissés");
+    const isExtended = true;
 
     const skipSubStats =
       rapport === "offensif" &&
@@ -207,42 +201,30 @@ export default function StatGlobalOverview({ data }) {
           <span className="text-gray-500">AP</span>
           <span className="mt-1 text-sm font-bold text-[#333]">{stat.ap}</span>
         </div>
-
-        {isExtended ? (
-          <>
-            <div className="flex flex-col items-center">
-              <span className="text-gray-500">CA</span>
-              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
-                {stat.ca ?? 0}
-              </span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-gray-500">ER</span>
-              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
-                {stat.er ?? 0}
-              </span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-gray-500">MB</span>
-              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
-                {stat.mb ?? 0}
-              </span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-gray-500">JT</span>
-              <span className="mt-1 text-sm font-bold text-[#D4AF37]">
-                {stat.jt ?? 0}
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center">
-            <span className="text-gray-500">GE</span>
-            <span className="mt-1 text-sm font-bold text-[#D4AF37]">
-              {computeGE(stat)}
-            </span>
-          </div>
-        )}
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">CA</span>
+          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+            {stat.ca ?? 0}
+          </span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">ER</span>
+          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+            {stat.er ?? 0}
+          </span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">MB</span>
+          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+            {stat.mb ?? 0}
+          </span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">JT</span>
+          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+            {stat.jt ?? 0}
+          </span>
+        </div>
       </div>
     );
   };

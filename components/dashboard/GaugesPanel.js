@@ -281,7 +281,7 @@ export default function GaugesPanel({ data, range = "all" }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: idx * 0.1, duration: 0.4 }}
-          className="bg-[#ffffff] border border-[#E4CDA1] rounded-2xl p-4 w-full max-w-[190px] flex flex-col items-center shadow transition-transform duration-300 hover:scale-[1.03] hover:shadow-[0_0_15px_rgba(212,175,55,0.4)]"
+          className="bg-white border border-[#E4CDA1] rounded-xl p-4 w-[200px] h-[180px] flex flex-col justify-between items-center shadow-md hover:scale-[1.02] transition-all"
         >
           <p className="text-[13px] text-gray-700 font-semibold mb-1 tracking-wide">
             {g.count}

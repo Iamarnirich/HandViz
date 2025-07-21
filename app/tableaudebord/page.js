@@ -161,24 +161,26 @@ function DashboardLayout() {
             </div>
           </div>
           {/* Ensemble Gauges + UtilisationSecteurs + Gauges Duel Direct */}
-          <div className="w-full flex flex-col items-center justify-center gap-4 mt-8">
-            <div className="flex flex-row justify-center gap-20 items-start">
-              {/* Gauches */}
-              <div className="flex flex-col gap-5 items-end w-[220px]">
+          <div className="w-full flex flex-col items-center justify-center gap-16 mt-8">
+            <div className="flex flex-row justify-center gap-20 items-start w-full max-w-[1600px] px-4">
+              {/* Colonnes Gauche */}
+              <div className="flex flex-col gap-6 items-end w-full max-w-[280px]">
                 <GaugesPanel data={filteredEvents} range="left" />
                 <GaugesPanel data={filteredEvents} range="bottom-left" />
               </div>
 
-              {/* Centre avec diagramme + gauges en dessous */}
-              <div className="flex flex-col items-center gap-20 w-full max-w-5xl mt-[80px]">
-                <UtilisationSecteursChart data={filteredEvents} />
-                <div className="flex justify-center gap-8">
+              {/* Centre (Diagramme + gauges duel) */}
+              <div className="flex flex-col items-center gap-20 w-full max-w-[900px] mt-[50px]">
+                <div className="w-full aspect-[3/2]">
+                  <UtilisationSecteursChart data={filteredEvents} />
+                </div>
+                <div className="flex justify-center gap-8 flex-wrap">
                   <GaugesPanel data={filteredEvents} range="bottom-right" />
                 </div>
               </div>
 
-              {/* Droites */}
-              <div className="flex flex-col gap-5 items-start w-[220px]">
+              {/* Colonnes Droite */}
+              <div className="flex flex-col gap-6 items-start w-full max-w-[280px]">
                 <GaugesPanel data={filteredEvents} range="right" />
               </div>
             </div>
