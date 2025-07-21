@@ -7,13 +7,14 @@ import { useMemo } from "react";
 const secteurs = {
   ALG: { label: "Aile gauche", top: "20%", left: "18%" },
   ALD: { label: "Aile droite", top: "20%", left: "82%" },
-  "1-2G": { label: "6m - À gauche", top: "40%", left: "28%" },
-  "Central 6m": { label: "6m - Central", top: "43%", left: "50%" },
-  "1-2D": { label: "6m - À droite", top: "40%", left: "72%" },
-  "Central 7-9m": { label: "9m - Central", top: "64%", left: "50%" },
-  "Central 9m": { label: "9m - À gauche", top: "60%", left: "18%" },
-  ARD: { label: "9m - À droite", top: "60%", left: "82%" },
-  ARG: { label: "7 mètres", top: "80%", left: "30%" },
+  "1-2G": { label: "1-2 Gauche", top: "42%", left: "28%" },
+  "Central 6m": { label: "6m Central", top: "45%", left: "50%" },
+  "1-2D": { label: "1-2 Droite", top: "42%", left: "72%" },
+  "Central 7-9m": { label: "7-9m Central", top: "65%", left: "50%" },
+  "Central 9m": { label: "Central 9m", top: "74%", left: "50%" }, // repositionné
+  ARD: { label: "Arrière droit", top: "80%", left: "82%" },
+  ARG: { label: "Arrière gauche", top: "80%", left: "18%" },
+  "7M": { label: "Jet de 7m", top: "80%", left: "50%" }, // ajouté explicitement
 };
 
 export default function TerrainHandball({ data }) {
