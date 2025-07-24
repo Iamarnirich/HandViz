@@ -76,8 +76,50 @@ export default function NavBar() {
             </Link>
           </div>
 
-          {/* Connexion / Déconnexion */}
-          <div>
+          <div className="flex items-center gap-3">
+            {connected && (
+              <>
+                {/* Bouton Import CSV */}
+                <label
+                  htmlFor="csvUpload"
+                  className="px-4 py-1 cursor-pointer rounded-full bg-[#D4AF37] text-white hover:bg-[#b3974e] transition"
+                >
+                  Importer CSV
+                </label>
+                <input
+                  id="csvUpload"
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+
+                    Papa.parse(file, {
+                      header: true,
+                      skipEmptyLines: true,
+                      complete: async (results) => {
+                        const parsedData = results.data;
+
+                        // Ajoute ici un id_match si besoin
+                        const { error } = await supabase
+                          .from("evenements")
+                          .insert(parsedData);
+
+                        if (error) {
+                          console.error("Erreur d'import :", error.message);
+                          alert("Erreur lors de l'importation.");
+                        } else {
+                          alert("Fichier CSV importé avec succès !");
+                        }
+                      },
+                    });
+                  }}
+                />
+              </>
+            )}
+
+            {/* Bouton Déconnexion ou Connexion */}
             {connected ? (
               <button
                 onClick={handleLogout}

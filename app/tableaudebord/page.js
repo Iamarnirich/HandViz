@@ -51,6 +51,13 @@ function DashboardLayout() {
       </p>
     );
   }
+  const scoreUSDK = filteredEvents.filter((e) =>
+    e.resultat_cthb?.toLowerCase().includes("but usdk")
+  ).length;
+
+  const scoreLIM = filteredEvents.filter((e) =>
+    e.resultat_limoges?.toLowerCase().includes("but limoges")
+  ).length;
 
   return (
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
@@ -71,36 +78,42 @@ function DashboardLayout() {
         </select>
       </div>
 
-      {/* Bloc de présentation du match */}
       {matchId && (
-        <div className="mt-2 flex items-center justify-center gap-4">
-          {/* Logo équipe locale */}
-          <Image
-            src="/logoUSDK.png"
-            alt="Logo USDK"
-            width={40}
-            height={40}
-            className="object-contain w-10 h-10"
-          />
-
-          {/* Infos match */}
-          <div className="text-center">
-            <p className="text-sm text-gray-600 font-semibold">
-              J1 – 27/04/2025
-            </p>
-            <p className="text-lg font-bold text-gray-800">
-              USDK Dunkerque vs Limoges
-            </p>
+        <div className="mt-4 flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1] w-fit mx-auto">
+          {/* Équipe locale */}
+          <div className="flex items-center gap-3">
+            <Image
+              src="/logoUSDK.png"
+              alt="Logo USDK"
+              width={50}
+              height={50}
+              className="object-contain w-[50px] h-[50px]"
+            />
+            <div className="text-right">
+              <p className="text-sm font-semibold text-gray-600">USDK</p>
+              <p className="text-[22px] font-bold text-[#1a1a1a]">
+                {scoreUSDK}
+              </p>
+            </div>
           </div>
 
-          {/* Logo équipe adverse */}
-          <Image
-            src="/logolimoges.png"
-            alt="Logo Limoges"
-            width={40}
-            height={40}
-            className="object-contain w-10 h-10"
-          />
+          {/* Séparateur visuel */}
+          <div className="text-[24px] font-extrabold text-[#D4AF37]">–</div>
+
+          {/* Équipe adverse */}
+          <div className="flex items-center gap-3">
+            <div className="text-left">
+              <p className="text-sm font-semibold text-gray-600">LIMOGES</p>
+              <p className="text-[22px] font-bold text-[#1a1a1a]">{scoreLIM}</p>
+            </div>
+            <Image
+              src="/logolimoges.png"
+              alt="Logo Limoges"
+              width={50}
+              height={50}
+              className="object-contain w-[50px] h-[50px]"
+            />
+          </div>
         </div>
       )}
 
@@ -162,7 +175,7 @@ function DashboardLayout() {
           </div>
           {/* Ensemble Gauges + UtilisationSecteurs + Gauges Duel Direct */}
           <div className="w-full flex flex-col items-center justify-center gap-16 mt-8">
-            <div className="flex flex-row justify-center gap-20 items-start w-full max-w-[1600px] px-4">
+            <div className="flex flex-row justify-center gap-30 items-start w-full max-w-[1600px] px-4">
               {/* Colonnes Gauche */}
               <div className="flex flex-col gap-6 items-end w-full max-w-[280px]">
                 <GaugesPanel data={filteredEvents} range="left" />
@@ -170,27 +183,21 @@ function DashboardLayout() {
               </div>
 
               {/* Centre (Diagramme + gauges duel) */}
-              <div className="flex flex-col items-center gap-20 w-full max-w-[900px] mt-[50px]">
+              <div className="flex flex-col items-center gap-4 w-full max-w-[900px] mt-[50px]">
                 <div className="w-full aspect-[3/2]">
                   <UtilisationSecteursChart data={filteredEvents} />
                 </div>
-                <div className="flex justify-center gap-8 flex-wrap">
-                  <GaugesPanel data={filteredEvents} range="bottom-right" />
+                <div className="flex flex-col lg:flex-row justify-center items-start gap-10 w-full px-4 mt-8 max-w-6xl mx-auto">
+                  <EnclenchementsTable data={filteredEvents} />
+                  <EventTypePieChart data={filteredEvents} />
                 </div>
               </div>
 
               {/* Colonnes Droite */}
               <div className="flex flex-col gap-6 items-start w-full max-w-[280px]">
                 <GaugesPanel data={filteredEvents} range="right" />
+                <GaugesPanel data={filteredEvents} range="bottom-right" />
               </div>
-            </div>
-          </div>
-
-          {/* Pie chart centré */}
-          <div className="w-full flex justify-center">
-            <div className="grid grid-cols-1 gap-6 mt-8 w-full max-w-3xl px-4">
-              <EnclenchementsTable data={filteredEvents} />
-              <EventTypePieChart data={filteredEvents} />
             </div>
           </div>
         </>

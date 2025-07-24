@@ -202,15 +202,15 @@ export default function StatGlobalOverview({ data }) {
           <span className="mt-1 text-sm font-bold text-[#333]">{stat.ap}</span>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-gray-500">CA</span>
-          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
-            {stat.ca ?? 0}
-          </span>
-        </div>
-        <div className="flex flex-col items-center">
           <span className="text-gray-500">ER</span>
           <span className="mt-1 text-sm font-bold text-[#D4AF37]">
             {stat.er ?? 0}
+          </span>
+        </div>
+        <div className="flex flex-col items-center">
+          <span className="text-gray-500">CA</span>
+          <span className="mt-1 text-sm font-bold text-[#D4AF37]">
+            {stat.ca ?? 0}
           </span>
         </div>
         <div className="flex flex-col items-center">

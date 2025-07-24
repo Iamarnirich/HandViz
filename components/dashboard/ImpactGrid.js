@@ -9,9 +9,9 @@ const IMPACT_GRID = [
 ];
 
 const getColor = (eff) => {
-  if (eff >= 75) return "bg-[#d63031] text-white";
+  if (eff >= 75) return "bg-[green] text-white";
   if (eff >= 50) return "bg-[#fdcb6e] text-black";
-  if (eff > 0) return "bg-[#ffeaa7] text-black";
+  if (eff > 0) return "bg-[red] text-black";
   return "bg-[#dfe6e9] text-black";
 };
 
@@ -34,7 +34,7 @@ export default function ImpactGrid({ data }) {
   }, [data]);
 
   return (
-    <div className="w-full max-w-3xl mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-xl shadow-lg mb-4">
+    <div className="w-full max-w-xl mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-xl shadow-lg mb-4">
       {IMPACT_GRID.flat().map((zone, idx) => {
         const stats = impactStats[zone.toLowerCase()] || { tirs: 0, buts: 0 };
         const eff = stats.tirs > 0 ? (stats.buts / stats.tirs) * 100 : 0;
@@ -43,7 +43,7 @@ export default function ImpactGrid({ data }) {
         return (
           <div
             key={idx}
-            className={`aspect-[2.5/1] rounded-lg flex items-center justify-center text-lg font-extrabold ${bg} shadow hover:scale-[1.02] transition-transform`}
+            className={`aspect-[3/1] rounded-lg flex items-center justify-center text-m font-extrabold ${bg} shadow hover:scale-[1.02] transition-transform`}
           >
             {stats.buts} / {stats.tirs}
           </div>

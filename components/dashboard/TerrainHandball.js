@@ -5,16 +5,16 @@ import { useMemo } from "react";
 
 // Nouveau positionnement inspiré du schéma fourni
 const secteurs = {
-  ALG: { label: "Aile gauche", top: "20%", left: "18%" },
-  ALD: { label: "Aile droite", top: "20%", left: "82%" },
-  "1-2G": { label: "1-2 Gauche", top: "42%", left: "28%" },
-  "Central 6m": { label: "6m Central", top: "45%", left: "50%" },
-  "1-2D": { label: "1-2 Droite", top: "42%", left: "72%" },
-  "Central 7-9m": { label: "7-9m Central", top: "65%", left: "50%" },
-  "Central 9m": { label: "Central 9m", top: "74%", left: "50%" }, // repositionné
-  ARD: { label: "Arrière droit", top: "80%", left: "82%" },
-  ARG: { label: "Arrière gauche", top: "80%", left: "18%" },
-  "7M": { label: "Jet de 7m", top: "80%", left: "50%" }, // ajouté explicitement
+  ALG: { top: "20%", left: "18%" },
+  ALD: { top: "20%", left: "82%" },
+  "1-2G": { top: "42%", left: "28%" },
+  "Central 6m": { top: "37%", left: "50%" },
+  "1-2D": { top: "42%", left: "72%" },
+  "Central 7-9m": { top: "45%", left: "50%" },
+  "Central 9m": { top: "64%", left: "50%" }, // repositionné
+  ARD: { top: "80%", left: "82%" },
+  ARG: { top: "80%", left: "18%" },
+  "7M": { top: "80%", left: "50%" }, // ajouté explicitement
 };
 
 export default function TerrainHandball({ data }) {
@@ -71,7 +71,7 @@ export default function TerrainHandball({ data }) {
             <div className="text-[11px] font-bold leading-tight mb-1">
               {pos.label}
             </div>
-            <div className="text-[10px] leading-tight">
+            <div className="text-[16px] leading-tight">
               {stats.buts}/{stats.tirs} - {eff.toFixed(0)}%
             </div>
           </div>
