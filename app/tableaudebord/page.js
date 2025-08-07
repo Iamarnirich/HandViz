@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+
 import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
 import EventTypePieChart from "@/components/dashboard/EventTypePieChart";
 import UtilisationSecteursChart from "@/components/dashboard/UtilisationSecteursChart";
@@ -14,35 +15,123 @@ import EnclenchementsTable from "@/components/dashboard/EnclenchementsTable";
 
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
+import { MatchProvider, useMatch } from "@/contexts/MatchContext";
 
 function DashboardLayout() {
   const [evenements, setEvenements] = useState([]);
   const [matchs, setMatchs] = useState([]);
-  const [matchId, setMatchId] = useState(null);
+  const [clubs, setClubs] = useState({});
+  const [matchId, setMatchIdLocal] = useState(null);
   const { rapport, setRapport } = useRapport();
   const [loading, setLoading] = useState(true);
   const [showHistorique, setShowHistorique] = useState(false);
+
+  const {
+    setEquipeLocale,
+    setEquipeAdverse,
+    setIdMatch,
+    setNomMatch,
+    setIsTousLesMatchs,
+  } = useMatch();
 
   useEffect(() => {
     const fetchAll = async () => {
       const { data: matchsData } = await supabase
         .from("matchs")
-        .select("id, nom_match");
-      setMatchs(matchsData || []);
+        .select(
+          "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match"
+        );
 
       const { data: evenementsData } = await supabase
         .from("evenements")
         .select("*");
-      setEvenements(evenementsData || []);
 
+      const { data: clubsData } = await supabase
+        .from("clubs")
+        .select("id, nom, logo");
+
+      const clubsMap = {};
+      (clubsData || []).forEach((club) => {
+        clubsMap[club.id] = club;
+      });
+
+      setMatchs(matchsData || []);
+      setEvenements(evenementsData || []);
+      setClubs(clubsMap);
+
+      setEquipeLocale(null);
+      setEquipeAdverse(null);
+      setNomMatch(null);
+      setIdMatch(null);
+      setIsTousLesMatchs(true);
       setLoading(false);
     };
+
     fetchAll();
-  }, []);
+  }, [
+    setEquipeLocale,
+    setEquipeAdverse,
+    setNomMatch,
+    setIdMatch,
+    setIsTousLesMatchs,
+  ]);
+
+  const handleMatchChange = async (e) => {
+    const selectedId = e.target.value === "all" ? null : e.target.value;
+    setMatchIdLocal(selectedId);
+
+    if (selectedId) {
+      const matchData = matchs.find((m) => m.id === selectedId);
+      if (matchData) {
+        setEquipeLocale(matchData.equipe_locale);
+        setEquipeAdverse(matchData.equipe_visiteuse);
+        setNomMatch(matchData.nom_match);
+        setIdMatch(matchData.id);
+        setIsTousLesMatchs(false);
+      }
+    } else {
+      setEquipeLocale(null);
+      setEquipeAdverse(null);
+      setNomMatch(null);
+      setIdMatch(null);
+      setIsTousLesMatchs(true);
+    }
+  };
 
   const filteredEvents = matchId
     ? evenements.filter((e) => e.id_match === matchId)
     : evenements;
+
+  const selectedMatch = matchs.find((m) => m.id === matchId);
+  const clubLocal = selectedMatch ? clubs[selectedMatch.club_locale_id] : null;
+  const clubVisiteur = selectedMatch
+    ? clubs[selectedMatch.club_visiteuse_id]
+    : null;
+
+  const getScore = (club) => {
+    const nomClub = club?.nom?.toLowerCase();
+    if (!nomClub) return 0;
+
+    return filteredEvents.filter((e) => {
+      const resCthb = e.resultat_cthb?.toLowerCase() || "";
+      const resLimoges = e.resultat_limoges?.toLowerCase() || "";
+
+      const isButCthb =
+        resCthb.startsWith("but") &&
+        !resCthb.includes("encaiss") &&
+        resCthb.includes(nomClub);
+
+      const isButLimoges =
+        resLimoges.startsWith("but") &&
+        !resLimoges.includes("encaiss") &&
+        resLimoges.includes(nomClub);
+
+      return isButCthb || isButLimoges;
+    }).length;
+  };
+
+  const scoreLocal = getScore(clubLocal);
+  const scoreVisiteur = getScore(clubVisiteur);
 
   if (loading) {
     return (
@@ -51,73 +140,65 @@ function DashboardLayout() {
       </p>
     );
   }
-  const scoreUSDK = filteredEvents.filter((e) =>
-    e.resultat_cthb?.toLowerCase().includes("but usdk")
-  ).length;
-
-  const scoreLIM = filteredEvents.filter((e) =>
-    e.resultat_limoges?.toLowerCase().includes("but limoges")
-  ).length;
-
   return (
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
-      {/* Match filter */}
       <div className="flex justify-center mb-4">
         <select
-          onChange={(e) =>
-            setMatchId(e.target.value === "all" ? null : e.target.value)
-          }
+          onChange={handleMatchChange}
           className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">Tous les matchs</option>
-          {matchs.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nom_match}
+          {matchs.map((match) => (
+            <option key={match.id} value={match.id}>
+              {match.nom_match}
             </option>
           ))}
         </select>
       </div>
 
-      {matchId && (
-        <div className="mt-4 flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1] w-fit mx-auto">
-          {/* Équipe locale */}
-          <div className="flex items-center gap-3">
-            <Image
-              src="/logoUSDK.png"
-              alt="Logo USDK"
-              width={50}
-              height={50}
-              className="object-contain w-[50px] h-[50px]"
-            />
-            <div className="text-right">
-              <p className="text-sm font-semibold text-gray-600">USDK</p>
-              <p className="text-[22px] font-bold text-[#1a1a1a]">
-                {scoreUSDK}
-              </p>
+      {matchId && clubLocal && clubVisiteur && (
+        <div className="mt-4 w-fit mx-auto flex flex-col items-center gap-1">
+          <p className="text-sm font-semibold text-gray-600">
+            J1 – {selectedMatch.date_match}
+          </p>
+          <div className="flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1]">
+            <div className="flex items-center gap-3">
+              <Image
+                src={clubLocal.logo}
+                alt={clubLocal.nom}
+                width={50}
+                height={50}
+              />
+              <div className="text-right">
+                <p className="text-sm font-semibold text-gray-600">
+                  {clubLocal.nom}
+                </p>
+                <p className="text-[22px] font-bold text-[#1a1a1a]">
+                  {scoreLocal}
+                </p>
+              </div>
             </div>
-          </div>
-
-          {/* Séparateur visuel */}
-          <div className="text-[24px] font-extrabold text-[#D4AF37]">–</div>
-
-          {/* Équipe adverse */}
-          <div className="flex items-center gap-3">
-            <div className="text-left">
-              <p className="text-sm font-semibold text-gray-600">LIMOGES</p>
-              <p className="text-[22px] font-bold text-[#1a1a1a]">{scoreLIM}</p>
+            <div className="text-[24px] font-extrabold text-[#D4AF37]">–</div>
+            <div className="flex items-center gap-3">
+              <div className="text-left">
+                <p className="text-sm font-semibold text-gray-600">
+                  {clubVisiteur.nom}
+                </p>
+                <p className="text-[22px] font-bold text-[#1a1a1a]">
+                  {scoreVisiteur}
+                </p>
+              </div>
+              <Image
+                src={clubVisiteur.logo}
+                alt={clubVisiteur.nom}
+                width={50}
+                height={50}
+              />
             </div>
-            <Image
-              src="/logolimoges.png"
-              alt="Logo Limoges"
-              width={50}
-              height={50}
-              className="object-contain w-[50px] h-[50px]"
-            />
           </div>
         </div>
       )}
 
-      {/* Rapport filter + historique toggle */}
       <div className="flex justify-center gap-3 mb-6">
         <button
           onClick={() => {
@@ -161,42 +242,100 @@ function DashboardLayout() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <div className="h-full flex flex-col gap-6">
-              <StatGlobalOverview data={filteredEvents} matchId={matchId} />
+              <StatGlobalOverview
+                data={filteredEvents}
+                matchCount={
+                  matchId ? 1 : new Set(evenements.map((e) => e.id_match)).size
+                }
+              />
               <div className="w-full flex justify-center">
                 <TimelineChart data={filteredEvents} />
               </div>
             </div>
             <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
-              <ImpactGrid data={filteredEvents} />
+              <ImpactGrid
+                data={filteredEvents}
+                matchCount={
+                  matchId ? 1 : new Set(evenements.map((e) => e.id_match)).size
+                }
+              />
               <div className="w-full max-w-3xl aspect-[3/3]">
-                <TerrainHandBall data={filteredEvents} />
+                <TerrainHandBall
+                  data={filteredEvents}
+                  matchCount={
+                    matchId
+                      ? 1
+                      : new Set(evenements.map((e) => e.id_match)).size
+                  }
+                />
               </div>
             </div>
           </div>
-          {/* Ensemble Gauges + UtilisationSecteurs + Gauges Duel Direct */}
           <div className="w-full flex flex-col items-center justify-center gap-16 mt-8">
-            <div className="flex flex-row justify-center gap-30 items-start w-full max-w-[1600px] px-4">
-              {/* Colonnes Gauche */}
+            <div className="flex flex-row justify-center gap-10 items-start w-full max-w-[1600px] px-4">
               <div className="flex flex-col gap-6 items-end w-full max-w-[280px]">
-                <GaugesPanel data={filteredEvents} range="left" />
-                <GaugesPanel data={filteredEvents} range="bottom-left" />
+                <GaugesPanel
+                  data={filteredEvents}
+                  range="left"
+                  matchCount={
+                    matchId
+                      ? 1
+                      : new Set(evenements.map((e) => e.id_match)).size
+                  }
+                />
+                <GaugesPanel
+                  data={filteredEvents}
+                  range="bottom-left"
+                  matchCount={
+                    matchId
+                      ? 1
+                      : new Set(evenements.map((e) => e.id_match)).size
+                  }
+                />
               </div>
-
-              {/* Centre (Diagramme + gauges duel) */}
-              <div className="flex flex-col items-center gap-4 w-full max-w-[900px] mt-[50px]">
-                <div className="w-full aspect-[3/2]">
-                  <UtilisationSecteursChart data={filteredEvents} />
+              <div className="flex flex-col items-center gap-8 w-full">
+                {/* Utilisation des Secteurs */}
+                <div className="w-full max-w-4xl">
+                  <UtilisationSecteursChart
+                    data={filteredEvents}
+                    matchCount={
+                      matchId
+                        ? 1
+                        : new Set(evenements.map((e) => e.id_match)).size
+                    }
+                  />
                 </div>
-                <div className="flex flex-col lg:flex-row justify-center items-start gap-10 w-full px-4 mt-8 max-w-6xl mx-auto">
+
+                {/* EnclenchementsTable centré juste en dessous */}
+                <div className="w-full px-4">
                   <EnclenchementsTable data={filteredEvents} />
+                </div>
+
+                {/* À côté : Pie Chart (dans une autre colonne ou plus bas si besoin) */}
+                <div className="w-full max-w-4xl mt-6">
                   <EventTypePieChart data={filteredEvents} />
                 </div>
               </div>
 
-              {/* Colonnes Droite */}
               <div className="flex flex-col gap-6 items-start w-full max-w-[280px]">
-                <GaugesPanel data={filteredEvents} range="right" />
-                <GaugesPanel data={filteredEvents} range="bottom-right" />
+                <GaugesPanel
+                  data={filteredEvents}
+                  range="right"
+                  matchCount={
+                    matchId
+                      ? 1
+                      : new Set(evenements.map((e) => e.id_match)).size
+                  }
+                />
+                <GaugesPanel
+                  data={filteredEvents}
+                  range="bottom-right"
+                  matchCount={
+                    matchId
+                      ? 1
+                      : new Set(evenements.map((e) => e.id_match)).size
+                  }
+                />
               </div>
             </div>
           </div>
@@ -214,11 +353,12 @@ function DashboardLayout() {
   );
 }
 
-// 👉 Export avec le Provider
 export default function PageWrapper() {
   return (
     <RapportProvider>
-      <DashboardLayout />
+      <MatchProvider>
+        <DashboardLayout />
+      </MatchProvider>
     </RapportProvider>
   );
 }

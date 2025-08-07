@@ -1,4 +1,14 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "www.lnh.fr",
+        pathname: "/medias/sports_teams/**",
+      },
+    ],
+  },
+};
 
 export default nextConfig;

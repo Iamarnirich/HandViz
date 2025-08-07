@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import { useMatch } from "@/contexts/MatchContext";
+import { useRapport } from "@/contexts/RapportContext";
 
 const IMPACT_GRID = [
   ["Haut gauche", "Haut milieu", "Haut droite"],
@@ -16,22 +18,52 @@ const getColor = (eff) => {
 };
 
 export default function ImpactGrid({ data }) {
+  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
+  const { rapport } = useRapport();
+
   const impactStats = useMemo(() => {
     const map = {};
+    const equipe = (
+      rapport === "offensif" ? equipeLocale : equipeAdverse
+    )?.toLowerCase();
+
+    // ✅ Compter les matchs si "Tous les matchs" activé
+    let nombreDeMatchs = 1;
+    if (isTousLesMatchs) {
+      const matchIds = new Set(data.map((e) => e.id_match));
+      nombreDeMatchs = matchIds.size || 1;
+    }
+
     data.forEach((e) => {
       const zone = e.impact?.toLowerCase();
-      const resultat = e.resultat_cthb?.toLowerCase() || "";
+      const resultat =
+        (rapport === "offensif"
+          ? e.resultat_cthb
+          : e.resultat_limoges
+        )?.toLowerCase() || "";
       const action = e.nom_action?.toLowerCase() || "";
 
-      if (!zone || !action.includes("usdk")) return;
+      if (!zone) return;
+
+      const isMatchEquipe = action.includes(equipe);
+      const shouldInclude = isTousLesMatchs || isMatchEquipe;
+
+      if (!shouldInclude) return;
 
       const key = zone.trim();
       if (!map[key]) map[key] = { tirs: 0, buts: 0 };
       map[key].tirs++;
       if (resultat.includes("but")) map[key].buts++;
     });
+
+    // ✅ Moyenne si "Tous les matchs"
+    for (const key in map) {
+      map[key].tirs = Math.round(map[key].tirs / nombreDeMatchs);
+      map[key].buts = Math.round(map[key].buts / nombreDeMatchs);
+    }
+
     return map;
-  }, [data]);
+  }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs]);
 
   return (
     <div className="w-full max-w-xl mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-xl shadow-lg mb-4">

@@ -9,9 +9,10 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  CartesianGrid,
 } from "recharts";
 import { motion } from "framer-motion";
+import { useMatch } from "@/contexts/MatchContext";
+import { useRapport } from "@/contexts/RapportContext";
 
 const COLORS = [
   "#D4AF37",
@@ -23,22 +24,51 @@ const COLORS = [
 ];
 
 export default function UtilisationSecteursChart({ data }) {
+  const { equipeLocale, isTousLesMatchs } = useMatch();
+  const { rapport } = useRapport();
+
   const secteursData = useMemo(() => {
     const secteurCounts = {};
+    const eqLocal = (equipeLocale || "").toLowerCase();
 
     data.forEach((e) => {
-      const secteur = e.secteur;
-      const resultat = e.resultat_cthb?.toLowerCase();
-      if (secteur && resultat?.includes("usdk")) {
-        secteurCounts[secteur] = (secteurCounts[secteur] || 0) + 1;
+      const secteur = e.secteur?.trim();
+      if (!secteur) return;
+
+      let resultat = "";
+      if (rapport === "offensif") {
+        resultat = e.resultat_cthb?.toLowerCase() || "";
+        if (isTousLesMatchs || resultat.includes(eqLocal)) {
+          secteurCounts[secteur] = (secteurCounts[secteur] || 0) + 1;
+        }
+      } else if (rapport === "defensif") {
+        resultat = e.resultat_limoges?.toLowerCase() || "";
+        if (
+          isTousLesMatchs ||
+          (!resultat.includes(eqLocal) && resultat !== "")
+        ) {
+          secteurCounts[secteur] = (secteurCounts[secteur] || 0) + 1;
+        }
       }
     });
 
+    // ✅ Moyenne si "Tous les matchs"
+    let nombreDeMatchs = 1;
+    if (isTousLesMatchs) {
+      const matchIds = new Set(data.map((e) => e.id_match));
+      nombreDeMatchs = matchIds.size || 1;
+    }
+
     return Object.entries(secteurCounts).map(([secteur, count]) => ({
       secteur,
-      count,
+      count: Math.round(count / nombreDeMatchs), // ✅ Moyenne
     }));
-  }, [data]);
+  }, [data, equipeLocale, rapport, isTousLesMatchs]);
+
+  const title =
+    rapport === "offensif"
+      ? "Utilisation des secteurs (attaque)"
+      : "Utilisation des secteurs adverses";
 
   return (
     <motion.div
@@ -48,7 +78,7 @@ export default function UtilisationSecteursChart({ data }) {
       transition={{ duration: 0.6 }}
     >
       <h2 className="text-xl font-bold text-center text-[#111111] mb-6 tracking-wide uppercase">
-        Fréquence d&apos;utilisation des secteurs
+        {title}
       </h2>
 
       {secteursData.length > 0 ? (
@@ -80,7 +110,7 @@ export default function UtilisationSecteursChart({ data }) {
                 borderRadius: 8,
                 color: "#fff",
               }}
-              formatter={(v) => [`${v} actions`, "Secteur"]}
+              formatter={(v) => [`${v} actions (moy.)`, "Secteur"]}
             />
             <Bar
               dataKey="count"

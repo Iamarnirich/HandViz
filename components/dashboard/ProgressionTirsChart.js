@@ -13,6 +13,7 @@ import {
   ReferenceDot,
   Legend,
 } from "recharts";
+import { useMatch } from "@/contexts/MatchContext"; // ✅ dynamique
 
 const LABEL_COLOR = "#1a1a1a";
 
@@ -29,11 +30,16 @@ function extractMinuteFromMillis(ms) {
 }
 
 export default function ProgressionTirsChart({ data }) {
+  const { equipeLocale, equipeAdverse } = useMatch(); // ✅
+
   const { offensif, defensif, events, maxY } = useMemo(() => {
     const off = {},
       def = {},
       evts = [];
     let max = 0;
+
+    const eqLocal = (equipeLocale || "").toLowerCase(); // ✅
+    const eqAdv = (equipeAdverse || "").toLowerCase(); // ✅
 
     data.forEach((e) => {
       const resCTHB = e.resultat_cthb?.toLowerCase() || "";
@@ -48,13 +54,15 @@ export default function ProgressionTirsChart({ data }) {
         max = Math.max(max, store[minute][phaseKey]);
       };
 
-      if (resCTHB.includes("but usdk")) {
+      // ✅ Buts marqués → équipe locale
+      if (resCTHB.includes("but") && resCTHB.includes(eqLocal)) {
         for (const { key } of Object.values(PHASES)) {
           if (nom.includes(key)) addTo(off, key);
         }
       }
 
-      if (resLIM.includes("but limoges")) {
+      // ✅ Buts encaissés → équipe adverse
+      if (resLIM.includes("but") && resLIM.includes(eqAdv)) {
         for (const { key } of Object.values(PHASES)) {
           if (nom.includes(key)) addTo(def, key);
         }
@@ -93,7 +101,7 @@ export default function ProgressionTirsChart({ data }) {
       events: evts,
       maxY: max + 1,
     };
-  }, [data]);
+  }, [data, equipeLocale, equipeAdverse]); // ✅
 
   const renderBars = (stackId) =>
     Object.entries(PHASES).map(([label, { key, color }]) => (

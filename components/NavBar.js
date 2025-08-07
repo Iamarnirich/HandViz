@@ -34,35 +34,6 @@ export default function NavBar() {
       <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md shadow px-4 py-3">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-4">
-            {/* Burger + logo  {connected && (
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="text-gray-800 focus:outline-none"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  {menuOpen ? (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M4 6h16M4 12h16M4 18h16"
-                    />
-                  )}
-                </svg>
-              </button>
-            )} */}
             <Link
               href="/"
               className="text-xl font-semibold text-gray-700 flex items-center space-x-2"
@@ -79,41 +50,56 @@ export default function NavBar() {
           <div className="flex items-center gap-3">
             {connected && (
               <>
-                {/* Bouton Import CSV */}
+                {/* Bouton Import Excel */}
                 <label
-                  htmlFor="csvUpload"
+                  htmlFor="xlsxUpload"
                   className="px-4 py-1 cursor-pointer rounded-full bg-[#D4AF37] text-white hover:bg-[#b3974e] transition"
                 >
-                  Importer CSV
+                  Importer Match
                 </label>
+
                 <input
-                  id="csvUpload"
+                  id="xlsxUpload"
                   type="file"
-                  accept=".csv"
+                  accept=".xlsx"
                   className="hidden"
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
 
-                    Papa.parse(file, {
-                      header: true,
-                      skipEmptyLines: true,
-                      complete: async (results) => {
-                        const parsedData = results.data;
+                    try {
+                      const XLSX = await import("xlsx");
+                      const arrayBuffer = await file.arrayBuffer();
+                      const workbook = XLSX.read(arrayBuffer);
+                      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                      const jsonData = XLSX.utils.sheet_to_json(sheet);
 
-                        // Ajoute ici un id_match si besoin
-                        const { error } = await supabase
-                          .from("evenements")
-                          .insert(parsedData);
+                      const matchNom = file.name
+                        .replace(/^Données_?/i, "")
+                        .replace(/\.xlsx$/i, "")
+                        .replace(/_/g, " ")
+                        .trim();
 
-                        if (error) {
-                          console.error("Erreur d'import :", error.message);
-                          alert("Erreur lors de l'importation.");
-                        } else {
-                          alert("Fichier CSV importé avec succès !");
-                        }
-                      },
-                    });
+                      const res = await fetch("/api/import", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ matchNom, rows: jsonData }),
+                      });
+
+                      if (res.ok) {
+                        alert("Fichier importé avec succès !");
+                      } else {
+                        const data = await res.json();
+                        alert(
+                          "Erreur d'import : " +
+                            (data?.error || "Erreur inconnue")
+                        );
+                        console.error(data);
+                      }
+                    } catch (err) {
+                      console.error("Erreur lors de l'import :", err);
+                      alert("Une erreur est survenue pendant l'import.");
+                    }
                   }}
                 />
               </>
@@ -138,30 +124,6 @@ export default function NavBar() {
           </div>
         </div>
       </nav>
-
-      {/* Menu déroulant latéral 
-      {connected && (
-        <div
-          className={`fixed top-11 left-0 h-full w-64 bg-white shadow-lg z-[999] transform ${
-            menuOpen ? "translate-x-0" : "-translate-x-full"
-          } transition-transform duration-300 ease-in-out pt-[64px] px-6`}
-        >
-          <nav className="flex flex-col space-y-4 text-gray-800 font-medium">
-            <Link href="/tableaudebord" onClick={() => setMenuOpen(false)}>
-              Tableau de bord
-            </Link>
-            <Link href="/comparateur" onClick={() => setMenuOpen(false)}>
-              Comparateur
-            </Link>
-            <Link href="/matchs" onClick={() => setMenuOpen(false)}>
-              Matchs
-            </Link>
-            <Link href="/a-propos" onClick={() => setMenuOpen(false)}>
-              À propos
-            </Link>
-          </nav>
-        </div>
-      )} */}
     </>
   );
 }

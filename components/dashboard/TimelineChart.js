@@ -30,13 +30,16 @@ function extractMinuteFromMillis(ms) {
 }
 
 export default function TimelineChart({ data }) {
-  const { rapport } = useRapport();
+  const { rapport, equipeLocale, equipeAdverse } = useRapport();
 
   const { offensif, defensif, events, maxY } = useMemo(() => {
     const off = {},
       def = {},
       evts = [];
     let max = 0;
+
+    const eqLocal = (equipeLocale || "").toLowerCase();
+    const eqAdv = (equipeAdverse || "").toLowerCase();
 
     data.forEach((e) => {
       const resCTHB = e.resultat_cthb?.toLowerCase() || "";
@@ -45,24 +48,27 @@ export default function TimelineChart({ data }) {
       const minute = extractMinuteFromMillis(e.position);
       if (minute === null || minute > 60) return;
 
-      const addTo = (store, phaseKey) => {
-        if (!store[minute]) store[minute] = {};
-        store[minute][phaseKey] = (store[minute][phaseKey] || 0) + 1;
-        max = Math.max(max, store[minute][phaseKey]);
+      const addTo = (timeline, key) => {
+        if (!timeline[minute]) timeline[minute] = {};
+        timeline[minute][key] = (timeline[minute][key] || 0) + 1;
+        max = Math.max(max, timeline[minute][key]);
       };
 
-      if (resCTHB.includes("but usdk")) {
+      // Offensif
+      if (resCTHB.includes("but") && resCTHB.includes(eqLocal)) {
         for (const { key } of Object.values(PHASES)) {
           if (nom.includes(key)) addTo(off, key);
         }
       }
 
-      if (resLIM.includes("but limoges")) {
+      // Défensif
+      if (resLIM.includes("but") && resLIM.includes(eqAdv)) {
         for (const { key } of Object.values(PHASES)) {
           if (nom.includes(key)) addTo(def, key);
         }
       }
 
+      // Événements
       if (resCTHB.includes("tto") || resLIM.includes("tto")) {
         evts.push({ type: "tto", minute });
       }
@@ -79,8 +85,8 @@ export default function TimelineChart({ data }) {
       }
     });
 
-    const formatData = (timeline) => {
-      return Array.from({ length: 61 }, (_, m) => {
+    const formatData = (timeline) =>
+      Array.from({ length: 61 }, (_, m) => {
         const minuteData = { minute: m };
         const phaseCounts = timeline[m] || {};
         for (const phase in phaseCounts) {
@@ -88,7 +94,6 @@ export default function TimelineChart({ data }) {
         }
         return minuteData;
       });
-    };
 
     return {
       offensif: formatData(off),
@@ -96,7 +101,7 @@ export default function TimelineChart({ data }) {
       events: evts,
       maxY: max + 1,
     };
-  }, [data]);
+  }, [data, equipeLocale, equipeAdverse]);
 
   const renderBars = (stackId) =>
     Object.entries(PHASES).map(([label, { key, color }]) => (
@@ -158,7 +163,7 @@ export default function TimelineChart({ data }) {
         <ResponsiveContainer width="100%" height={280}>
           <BarChart
             data={rapport === "offensif" ? offensif : defensif}
-            margin={{ top: 10, bottom: 50, left: 10, right: 10 }} // 💡 Ajouté + espace pour Legend
+            margin={{ top: 10, bottom: 50, left: 10, right: 10 }}
           >
             <XAxis
               dataKey="minute"
@@ -171,16 +176,12 @@ export default function TimelineChart({ data }) {
               allowDecimals={false}
             />
             <Tooltip />
-
-            {/* ✅ Déplacée ici pour plus d’espace haut */}
             <Legend
               verticalAlign="bottom"
               height={40}
               iconSize={10}
               wrapperStyle={{ fontSize: "12px", marginTop: "20px" }}
             />
-
-            {/* ✅ Ligne de mi-temps propre et dégagée */}
             <ReferenceLine
               x={30}
               stroke="#6b7280"
@@ -194,8 +195,6 @@ export default function TimelineChart({ data }) {
                 fontWeight: 600,
               }}
             />
-
-            {/* ✅ Barres bien espacées */}
             {renderBars("stack")}
             {renderEventMarkers(rapport === "defensif")}
           </BarChart>

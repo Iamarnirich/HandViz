@@ -8,9 +8,11 @@ import {
 } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
+import { useMatch } from "@/contexts/MatchContext";
 
 export default function GaugesPanel({ data, range = "all" }) {
   const { rapport } = useRapport();
+  const { equipeLocale, equipeAdverse, isTousLesMatchs, matchs } = useMatch(); // ✅ matchs inclus
 
   const stats = useMemo(() => {
     const ZONES_DUELS = [
@@ -20,6 +22,10 @@ export default function GaugesPanel({ data, range = "all" }) {
       "1-2d",
       "1-2g",
     ];
+
+    const eqLocal = (equipeLocale || "").toLowerCase();
+    const eqAdv = (equipeAdverse || "").toLowerCase();
+    const diviseur = isTousLesMatchs ? matchs?.length || 1 : 1;
 
     if (rapport === "defensif") {
       let possessionsAdv = 0,
@@ -40,37 +46,39 @@ export default function GaugesPanel({ data, range = "all" }) {
         const secteur = e.secteur?.toLowerCase() || "";
         const nombre = e.nombre?.toLowerCase() || "";
 
-        const isAdverse =
-          action.includes("limoges") || resultat.includes("limoges");
+        const isAdverse = isTousLesMatchs
+          ? true
+          : action.includes(eqAdv) || resultat.includes(eqAdv);
 
         if (isAdverse) {
-          if (action.includes("possession limoges")) possessionsAdv++;
-          if (resultat.includes("but limoges")) butsRecus++;
+          if (action.includes(`possession ${eqAdv}`)) possessionsAdv++;
+          if (resultat.includes(`but ${eqAdv}`)) butsRecus++;
 
-          const isAP = action.includes("attaque limoges");
+          const isAP = action.includes(`attaque ${eqAdv}`);
           const isGE =
-            action.includes("ca limoges") ||
-            action.includes("er limoges") ||
-            action.includes("mb limoges") ||
-            action.includes("transition limoges");
+            action.includes(`ca ${eqAdv}`) ||
+            action.includes(`er ${eqAdv}`) ||
+            action.includes(`mb ${eqAdv}`) ||
+            action.includes(`transition ${eqAdv}`);
 
           if (isAP) {
             apAdv++;
-            if (resultat.includes("but limoges")) butsAP++;
+            if (resultat.includes(`but ${eqAdv}`)) butsAP++;
             if (secteur) tirsAP++;
             if (ZONES_DUELS.some((z) => secteur.includes(z))) {
               tirsDuel++;
               if (resultat.includes("but")) butsDuel++;
             }
           }
+
           if (isGE) {
             geAdv++;
-            if (resultat.includes("but limoges")) butsGE++;
+            if (resultat.includes(`but ${eqAdv}`)) butsGE++;
           }
 
           if (nombre.includes("supériorité")) {
             SupAdv++;
-            if (resultat.includes("but limoges")) butsInf++;
+            if (resultat.includes(`but ${eqAdv}`)) butsInf++;
           }
         }
       });
@@ -113,7 +121,10 @@ export default function GaugesPanel({ data, range = "all" }) {
           count: `${butsDuel}/${tirsDuel}`,
           color: "#D4AF37",
         },
-      ];
+      ].map((s) => ({
+        ...s,
+        value: isTousLesMatchs ? s.value / diviseur : s.value,
+      }));
     }
 
     // Rapport offensif
@@ -139,127 +150,130 @@ export default function GaugesPanel({ data, range = "all" }) {
       const resultat = e.resultat_cthb?.toLowerCase() || "";
       const secteur = e.secteur?.toLowerCase() || "";
       const nombre = e.nombre?.toLowerCase() || "";
+      const isLocal = isTousLesMatchs
+        ? true
+        : action.includes(eqLocal) || resultat.includes(eqLocal);
+      if (!isLocal) return;
 
-      const isUSDK = action.includes("usdk") || resultat.includes("usdk");
-
-      if (!isUSDK) return;
-
-      if (action.includes("possession usdk")) possessions++;
-      if (action.includes("attaque usdk")) possAP++;
+      if (action.includes(`possession ${eqLocal}`)) possessions++;
+      if (action.includes(`attaque ${eqLocal}`)) possAP++;
       if (
-        action.includes("ca usdk") ||
-        action.includes("er usdk") ||
-        action.includes("mb usdk") ||
-        action.includes("transition usdk")
+        action.includes(`ca ${eqLocal}`) ||
+        action.includes(`er ${eqLocal}`) ||
+        action.includes(`mb ${eqLocal}`) ||
+        action.includes(`transition ${eqLocal}`)
       )
         possGE++;
 
       if (nombre.includes("supériorité")) supPoss++;
       else if (nombre.includes("infériorité")) infPoss++;
 
-      const isTir = resultat.includes("tir") || resultat.includes("but usdk");
+      const isTir =
+        resultat.includes("tir") || resultat.includes(`but ${eqLocal}`);
       if (isTir && !secteur.includes("7m")) {
         tirsHors7m++;
-        if (resultat.includes("but usdk")) butsHors7m++;
+        if (resultat.includes(`but ${eqLocal}`)) butsHors7m++;
       }
 
-      if (action.includes("attaque usdk")) {
+      if (action.includes(`attaque ${eqLocal}`)) {
         tirsAP++;
-        if (resultat.includes("but usdk")) butsAP++;
+        if (resultat.includes(`but ${eqLocal}`)) butsAP++;
 
         if (ZONES_DUELS.some((z) => secteur.includes(z))) {
           tirDuel++;
-          if (resultat.includes("but usdk")) butDuel++;
+          if (resultat.includes(`but ${eqLocal}`)) butDuel++;
         }
       }
 
       if (secteur.includes("7m")) {
         tirs7m++;
-        if (resultat.includes("but usdk")) buts7m++;
+        if (resultat.includes(`but ${eqLocal}`)) buts7m++;
       }
 
       if (
-        (action.includes("ca usdk") ||
-          action.includes("er usdk") ||
-          action.includes("mb usdk") ||
-          action.includes("transition usdk")) &&
-        resultat.includes("but usdk")
+        (action.includes(`ca ${eqLocal}`) ||
+          action.includes(`er ${eqLocal}`) ||
+          action.includes(`mb ${eqLocal}`) ||
+          action.includes(`transition ${eqLocal}`)) &&
+        resultat.includes(`but ${eqLocal}`)
       ) {
         butsGE++;
       }
 
-      if (nombre.includes("supériorité") && resultat.includes("but usdk")) {
+      if (
+        nombre.includes("supériorité") &&
+        resultat.includes(`but ${eqLocal}`)
+      ) {
         butsSup++;
       }
-      if (nombre.includes("infériorité") && resultat.includes("but usdk")) {
+      if (
+        nombre.includes("infériorité") &&
+        resultat.includes(`but ${eqLocal}`)
+      ) {
         butsInf++;
       }
     });
 
-    return [
+    const result = [
       {
         label: "Eff. Globale",
         value:
           possessions > 0 ? ((butsHors7m + buts7m) / possessions) * 100 : 0,
         count: `${butsHors7m + buts7m}/${possessions}`,
-        color: "#D4AF37",
       },
       {
         label: "Eff. Attaque Placée",
         value: possAP > 0 ? (butsAP / possAP) * 100 : 0,
         count: `${butsAP}/${possAP}`,
-        color: "#D4AF37",
       },
       {
         label: "Eff. Grand Espace",
         value: possGE > 0 ? (butsGE / possGE) * 100 : 0,
         count: `${butsGE}/${possGE}`,
-        color: "#D4AF37",
       },
       {
         label: "Eff. Tirs (hors 7m)",
         value: tirsHors7m > 0 ? (butsHors7m / tirsHors7m) * 100 : 0,
         count: `${butsHors7m}/${tirsHors7m}`,
-        color: "#D4AF37",
       },
       {
         label: "Tirs en Attaque Placée",
         value: tirsAP > 0 ? (butsAP / tirsAP) * 100 : 0,
         count: `${butsAP}/${tirsAP}`,
-        color: "#D4AF37",
       },
       {
         label: "Tirs sur 7m",
         value: tirs7m > 0 ? (buts7m / tirs7m) * 100 : 0,
         count: `${buts7m}/${tirs7m}`,
-        color: "#D4AF37",
       },
       {
         label: "Eff. Supériorité",
         value: supPoss > 0 ? (butsSup / supPoss) * 100 : 0,
         count: `${butsSup}/${supPoss}`,
-        color: "#D4AF37",
       },
       {
         label: "Eff. Infériorité",
         value: infPoss > 0 ? (butsInf / infPoss) * 100 : 0,
         count: `${butsInf}/${infPoss}`,
-        color: "#D4AF37",
       },
       {
         label: "% tirs en Duel Direct",
         value: tirsAP > 0 ? (tirDuel / tirsAP) * 100 : 0,
         count: `${tirDuel}/${tirsAP}`,
-        color: "#D4AF37",
       },
       {
         label: "% Réussite Duel Direct",
         value: tirDuel > 0 ? (butDuel / tirDuel) * 100 : 0,
         count: `${butDuel}/${tirDuel}`,
-        color: "#D4AF37",
       },
     ];
-  }, [data, rapport]);
+
+    return result.map((s) => ({
+      ...s,
+      value: isTousLesMatchs ? s.value / diviseur : s.value,
+      color: "#D4AF37",
+    }));
+  }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs, matchs]);
 
   const displayedStats = useMemo(() => {
     if (range === "left") return stats.slice(0, 3);
@@ -270,11 +284,7 @@ export default function GaugesPanel({ data, range = "all" }) {
   }, [stats, range]);
 
   return (
-    <div
-      className={`grid gap-4 ${
-        range === "bottom-right" ? "grid-cols-1" : "grid-cols-1"
-      }`}
-    >
+    <div className="grid gap-4 grid-cols-1">
       {displayedStats.map((g, idx) => (
         <motion.div
           key={idx}

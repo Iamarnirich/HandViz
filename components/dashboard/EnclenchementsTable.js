@@ -2,9 +2,11 @@
 
 import { useMemo } from "react";
 import { useRapport } from "@/contexts/RapportContext";
+import { useMatch } from "@/contexts/MatchContext";
 
 export default function EnclenchementsTable({ data }) {
   const { rapport } = useRapport();
+  const { equipeLocale, isTousLesMatchs } = useMatch();
 
   const rows = useMemo(() => {
     if (rapport !== "offensif") return [];
@@ -12,83 +14,117 @@ export default function EnclenchementsTable({ data }) {
     const stats = {};
     let totalEvents = 0;
 
+    // Initialisation des colonnes focus
+    const focusTypes = ["2vs2", "duel", "bloc", "écran"];
+
     data.forEach((e) => {
       const encl = e.enclenchement?.trim();
-      const action = e.nom_action?.toLowerCase() || "";
+      const tempsFort = e.temps_fort?.toLowerCase() || "";
       const resCTHB = e.resultat_cthb?.toLowerCase() || "";
+      const action = e.nom_action?.toLowerCase() || "";
+      const equipe = equipeLocale?.toLowerCase() || "";
 
-      const isUSDK = action.includes("usdk") || resCTHB.includes("usdk");
+      const isCorrectTeam =
+        isTousLesMatchs || resCTHB.includes(equipe) || action.includes(equipe);
 
-      if (!encl || !isUSDK) return;
+      if (!encl || !isCorrectTeam) return;
 
-      if (!stats[encl]) stats[encl] = { total: 0, success: 0 };
+      if (!stats[encl]) {
+        stats[encl] = {
+          total: 0,
+          success: 0,
+          focus: {
+            "2vs2": { total: 0, success: 0 },
+            duel: { total: 0, success: 0 },
+            bloc: { total: 0, success: 0 },
+            écran: { total: 0, success: 0 },
+          },
+        };
+      }
+
       stats[encl].total++;
       totalEvents++;
 
       const isSuccess =
-        resCTHB.includes("but usdk") ||
-        resCTHB.includes("7m obtenu usdk") ||
+        resCTHB.includes("but " + equipe) ||
+        resCTHB.includes("7m obtenu " + equipe) ||
         resCTHB.includes("2' obtenu");
 
       if (isSuccess) stats[encl].success++;
+
+      focusTypes.forEach((type) => {
+        if (tempsFort.includes(type)) {
+          stats[encl].focus[type].total++;
+          if (isSuccess) stats[encl].focus[type].success++;
+        }
+      });
     });
 
-    const rows = Object.entries(stats)
-      .map(([label, { total: count, success }]) => ({
+    const rows = Object.entries(stats).map(([label, values]) => {
+      const base = {
         enclenchement: label,
-        reussite: count > 0 ? ((success / count) * 100).toFixed(1) + "%" : "0%",
+        reussite:
+          values.total > 0
+            ? ((values.success / values.total) * 100).toFixed(1) + "%"
+            : "0%",
         usage:
           totalEvents > 0
-            ? ((count / totalEvents) * 100).toFixed(1) + "%"
+            ? ((values.total / totalEvents) * 100).toFixed(1) + "%"
             : "0%",
-      }))
-      .sort((a, b) => parseFloat(b.usage) - parseFloat(a.usage));
+      };
 
-    const totalSuccess = Object.values(stats).reduce(
-      (sum, s) => sum + s.success,
-      0
-    );
-    const totalCount = Object.values(stats).reduce(
-      (sum, s) => sum + s.total,
-      0
-    );
+      focusTypes.forEach((type) => {
+        const focus = values.focus[type];
+        base[type] =
+          focus.total > 0
+            ? ((focus.success / focus.total) * 100).toFixed(1) + "%"
+            : "0%";
+      });
 
-    const recapRow = {
-      enclenchement: "Total",
-      reussite:
-        totalCount > 0
-          ? ((totalSuccess / totalCount) * 100).toFixed(1) + "%"
-          : "0%",
-      usage: "100%",
-    };
+      return base;
+    });
 
-    return [...rows, recapRow];
-  }, [data, rapport]);
+    return rows.sort((a, b) => parseFloat(b.usage) - parseFloat(a.usage));
+  }, [data, rapport, equipeLocale, isTousLesMatchs]);
 
-  // Après calcul, si pas de données à afficher → ne rien rendre
   if (rapport !== "offensif" || rows.length === 0) return null;
 
+  const focusLabels = ["2vs2", "duel", "bloc", "écran"];
+
   return (
-    <div className="mt-10 w-full max-w-5xl mx-auto bg-white border border-gray-200 shadow-sm rounded-xl overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
+    <div className="mt-10 w-full flex justify-center">
+      <div className="w-full max-w-6xl bg-white border border-gray-200 shadow-sm rounded-xl overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 text-sm table-auto">
           <thead className="bg-gray-50 text-gray-600 uppercase text-xs tracking-wider">
             <tr>
-              <th className="px-6 py-3 text-left font-medium">Enclenchement</th>
-              <th className="px-6 py-3 text-center font-medium">% Réussite</th>
-              <th className="px-6 py-3 text-center font-medium">
+              <th className="px-4 py-3 text-left font-medium">Enclenchement</th>
+              <th className="px-4 py-3 text-center font-medium">% Réussite</th>
+              <th className="px-4 py-3 text-center font-medium">
                 % Utilisation
               </th>
+              {focusLabels.map((label) => (
+                <th
+                  key={label}
+                  className="px-4 py-3 text-center font-medium whitespace-nowrap"
+                >
+                  % Efficacité {label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100 text-gray-700">
             {rows.map((row, idx) => (
               <tr key={idx} className="hover:bg-gray-50 transition">
-                <td className="px-6 py-3 whitespace-nowrap font-medium">
+                <td className="px-4 py-3 font-medium whitespace-nowrap">
                   {row.enclenchement}
                 </td>
-                <td className="px-6 py-3 text-center">{row.reussite}</td>
-                <td className="px-6 py-3 text-center">{row.usage}</td>
+                <td className="px-4 py-3 text-center">{row.reussite}</td>
+                <td className="px-4 py-3 text-center">{row.usage}</td>
+                {focusLabels.map((label) => (
+                  <td key={label} className="px-4 py-3 text-center">
+                    {row[label]}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

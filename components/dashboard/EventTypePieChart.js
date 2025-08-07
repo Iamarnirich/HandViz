@@ -3,11 +3,13 @@
 import { useMemo } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useRapport } from "@/contexts/RapportContext";
+import { useMatch } from "@/contexts/MatchContext";
 
 const COLORS = ["#D4AF37", "#1a1a1a"];
 
 export default function EventTypePieChart({ data }) {
   const { rapport } = useRapport();
+  const { equipeAdverse, isTousLesMatchs } = useMatch();
 
   const charts = useMemo(() => {
     if (rapport !== "defensif") return null;
@@ -19,17 +21,37 @@ export default function EventTypePieChart({ data }) {
     data?.forEach((e) => {
       const res = e.resultat_limoges?.toLowerCase().trim() || "";
 
-      if (res === "but encaissé limoges") {
-        goals++;
-      } else if (
-        res === "déf limoges neutralisation" ||
-        res === "déf limoges contré" ||
-        res === "déf limoges arrêt" ||
-        res === "tir arrêté limoges"
-      ) {
-        saves++;
-      } else if (res === "récupération limoges" || res === "tir hc limoges") {
-        missed++;
+      if (isTousLesMatchs) {
+        // Tous les matchs → logique générique
+        if (res.includes("but encaissé")) {
+          goals++;
+        } else if (
+          res.includes("neutralisation") ||
+          res.includes("contré") ||
+          res.includes("arrêt") ||
+          res.includes("tir arrêté")
+        ) {
+          saves++;
+        } else if (res.includes("récupération") || res.includes("tir hc")) {
+          missed++;
+        }
+      } else {
+        // Un seul match sélectionné → logique ciblée
+        const adv = equipeAdverse?.toLowerCase().trim();
+        if (!adv) return;
+
+        if (res === `but encaissé ${adv}`) {
+          goals++;
+        } else if (
+          res === `déf ${adv} neutralisation` ||
+          res === `déf ${adv} contré` ||
+          res === `déf ${adv} arrêt` ||
+          res === `tir arrêté ${adv}`
+        ) {
+          saves++;
+        } else if (res === `récupération ${adv}` || res === `tir hc ${adv}`) {
+          missed++;
+        }
       }
     });
 
@@ -53,7 +75,7 @@ export default function EventTypePieChart({ data }) {
         ],
       },
     ];
-  }, [data, rapport]);
+  }, [data, rapport, equipeAdverse, isTousLesMatchs]);
 
   if (!charts) return null;
 
