@@ -15,6 +15,68 @@ import {
 import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
+function getColor(title, value, rapport) {
+  if (value === undefined || value === "—") return "text-[#1a1a1a]";
+  const num = parseFloat(value);
+
+  if (rapport === "offensif") {
+    switch (title) {
+      case "Possessions":
+        return num >= 55 ? "text-green-600" : "text-red-600";
+      case "Buts marqués":
+        return num >= 32 ? "text-green-600" : "text-red-600";
+      case "Pertes de balle":
+        return num <= 1
+          ? "text-blue-600"
+          : num < 10
+          ? "text-green-600"
+          : "text-red-600";
+      case "Tirs ratés":
+        return num > 13 ? "text-red-600" : "text-green-600";
+      case "Tirs total":
+        return num < 55 ? "text-red-600" : "text-green-600";
+      case "Neutralisations":
+        return num > 17 ? "text-red-600" : "text-green-600";
+      case "2 Min obtenues":
+        return num > 3
+          ? "text-blue-600"
+          : num < 3
+          ? "text-red-600"
+          : "text-green-600";
+      case "7 m obtenus":
+        return num > 5.5 ? "text-red-600" : "text-blue-600";
+      default:
+        return "text-[#1a1a1a]";
+    }
+  }
+
+  if (rapport === "defensif") {
+    switch (title) {
+      case "Possessions":
+        return num >= 54 ? "text-green-600" : "text-red-600";
+      case "Buts encaissés":
+        return num <= 29 ? "text-green-600" : "text-red-600";
+      case "Arrêts de GB":
+        return num >= 13 ? "text-green-600" : "text-red-600";
+      case "Balles récupérées":
+        return num >= 11 ? "text-green-600" : "text-red-600";
+      //case "Tirs Hors-Cadre":
+      //return num >= 11 ? "text-green-600" : "text-red-600";
+      case "Total tirs reçus":
+        return num <= 50 ? "text-green-600" : "text-red-600";
+      case "Neutralisations réalisées":
+        return num >= 21 ? "text-green-600" : "text-red-600";
+      case "2 min subies":
+        return num > 2 ? "text-red-600" : "text-green-600";
+      case "7m subis":
+        return num > 3 ? "text-red-600" : "text-green-600";
+      default:
+        return "text-[#1a1a1a]";
+    }
+  }
+  return "text-[#1a1a1a]";
+}
+
 export default function StatGlobalOverview({ data, matchCount }) {
   const { rapport } = useRapport();
   const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
@@ -382,6 +444,8 @@ export default function StatGlobalOverview({ data, matchCount }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-4 px-4">
         {cards.map((card, idx) => {
           const Icon = card.icon;
+          const value = card.stat?.total;
+          const colorClass = getColor(card.title, value, rapport);
           return (
             <div
               key={idx}
@@ -394,13 +458,13 @@ export default function StatGlobalOverview({ data, matchCount }) {
                 </h4>
               </div>
               <div
-                className={`text-xl font-extrabold text-[#1a1a1a] text-center ${
+                className={`text-xl font-extrabold text-center ${colorClass} ${
                   !formatSub(card.stat, card.title)
                     ? "flex-grow flex items-center justify-center"
                     : ""
                 }`}
               >
-                {card.stat?.total ?? "—"}
+                {value ?? "—"}
               </div>
               {formatSub(card.stat, card.title)}
             </div>

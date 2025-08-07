@@ -10,9 +10,57 @@ import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
+function getGaugeColor(label, value, rapport) {
+  if (value === undefined || value === null || isNaN(value)) return "#999";
+
+  const seuils = {
+    offensif: {
+      "Eff. Globale": 55,
+      "Eff. Attaque Placée": 55,
+      "Eff. Grand Espace": 60,
+      "Eff. Supériorité": 75,
+      "Eff. Infériorité": 50, // seuil par défaut
+      "Eff. Tirs (hors 7m)": 60,
+      "% tirs en Duel Direct": 50,
+      "% Réussite Duel Direct": 50,
+    },
+    defensif: {
+      "Efficacité déf. Globale": 48,
+      "Efficacité déf. Placée": 48,
+      "Efficacité déf. GE": 50,
+      "Eff. en Inf. Numérique": 30,
+      "% Tirs en Duel reçus": 50,
+      "% Réussite Duel Adv": 50,
+    },
+  };
+
+  const sensInverse = [
+    "Efficacité déf. Globale",
+    "Efficacité déf. Placée",
+    "Efficacité déf. GE",
+    "Eff. en Inf. Numérique",
+    "% Tirs en Duel reçus",
+  ];
+
+  const seuil = seuils[rapport]?.[label];
+  const sens = sensInverse.includes(label) ? "inf" : "sup";
+
+  if (!seuil) return "#D4AF37";
+
+  if (sens === "sup") {
+    if (value >= seuil + 5) return "#003366"; // bleu
+    if (value >= seuil) return "#4CAF50"; // vert
+    return "#F44336"; // rouge
+  } else {
+    if (value <= seuil - 5) return "#003366"; // bleu
+    if (value <= seuil) return "#4CAF50"; // vert
+    return "#F44336"; // rouge
+  }
+}
+
 export default function GaugesPanel({ data, range = "all" }) {
   const { rapport } = useRapport();
-  const { equipeLocale, equipeAdverse, isTousLesMatchs, matchs } = useMatch(); // ✅ matchs inclus
+  const { equipeLocale, equipeAdverse, isTousLesMatchs, matchs } = useMatch();
 
   const stats = useMemo(() => {
     const ZONES_DUELS = [
@@ -83,47 +131,44 @@ export default function GaugesPanel({ data, range = "all" }) {
         }
       });
 
-      return [
+      const rawStats = [
         {
           label: "Efficacité déf. Globale",
           value:
             possessionsAdv > 0 ? (1 - butsRecus / possessionsAdv) * 100 : 0,
           count: `${possessionsAdv - butsRecus}/${possessionsAdv}`,
-          color: "#D4AF37",
         },
         {
           label: "Efficacité déf. Placée",
           value: apAdv > 0 ? (1 - butsAP / apAdv) * 100 : 0,
           count: `${apAdv - butsAP}/${apAdv}`,
-          color: "#D4AF37",
         },
         {
           label: "Efficacité déf. GE",
           value: geAdv > 0 ? (1 - butsGE / geAdv) * 100 : 0,
           count: `${geAdv - butsGE}/${geAdv}`,
-          color: "#D4AF37",
         },
         {
           label: "Eff. en Inf. Numérique",
           value: SupAdv > 0 ? (1 - butsInf / SupAdv) * 100 : 0,
           count: `${SupAdv - butsInf}/${SupAdv}`,
-          color: "#D4AF37",
         },
         {
           label: "% Tirs en Duel reçus",
           value: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0,
           count: `${tirsDuel}/${tirsAP}`,
-          color: "#D4AF37",
         },
         {
           label: "% Réussite Duel Adv",
           value: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0,
           count: `${butsDuel}/${tirsDuel}`,
-          color: "#D4AF37",
         },
-      ].map((s) => ({
+      ];
+
+      return rawStats.map((s) => ({
         ...s,
         value: isTousLesMatchs ? s.value / diviseur : s.value,
+        color: getGaugeColor(s.label, s.value, rapport),
       }));
     }
 
@@ -271,7 +316,7 @@ export default function GaugesPanel({ data, range = "all" }) {
     return result.map((s) => ({
       ...s,
       value: isTousLesMatchs ? s.value / diviseur : s.value,
-      color: "#D4AF37",
+      color: getGaugeColor(s.label, s.value, rapport),
     }));
   }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs, matchs]);
 
