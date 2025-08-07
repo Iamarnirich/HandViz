@@ -306,8 +306,7 @@ function DashboardLayout() {
                   />
                 </div>
 
-                {/* EnclenchementsTable centré juste en dessous */}
-                <div className="w-full px-4">
+                <div className="w-full max-w-6xl px-4">
                   <EnclenchementsTable data={filteredEvents} />
                 </div>
 

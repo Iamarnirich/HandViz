@@ -92,20 +92,20 @@ export default function EnclenchementsTable({ data }) {
   const focusLabels = ["2vs2", "duel", "bloc", "écran"];
 
   return (
-    <div className="mt-10 w-full flex justify-center">
-      <div className="w-full max-w-6xl bg-white border border-gray-200 shadow-sm rounded-xl overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 text-sm table-auto">
+    <div className="w-full max-w-6xl mx-auto">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm bg-white">
+        <table className="w-full table-auto text-sm divide-y divide-gray-200">
           <thead className="bg-gray-50 text-gray-600 uppercase text-xs tracking-wider">
             <tr>
-              <th className="px-4 py-3 text-left font-medium">Enclenchement</th>
-              <th className="px-4 py-3 text-center font-medium">% Réussite</th>
-              <th className="px-4 py-3 text-center font-medium">
+              <th className="px-2 py-2 text-left font-medium">Enclenchement</th>
+              <th className="px-2 py-2 text-center font-medium">% Réussite</th>
+              <th className="px-2 py-2 text-center font-medium">
                 % Utilisation
               </th>
               {focusLabels.map((label) => (
                 <th
                   key={label}
-                  className="px-4 py-3 text-center font-medium whitespace-nowrap"
+                  className="px-2 py-2 text-center font-medium whitespace-nowrap"
                 >
                   % Efficacité {label}
                 </th>
@@ -115,13 +115,13 @@ export default function EnclenchementsTable({ data }) {
           <tbody className="bg-white divide-y divide-gray-100 text-gray-700">
             {rows.map((row, idx) => (
               <tr key={idx} className="hover:bg-gray-50 transition">
-                <td className="px-4 py-3 font-medium whitespace-nowrap">
+                <td className="px-2 py-2 text-center whitespace-normal break-words">
                   {row.enclenchement}
                 </td>
-                <td className="px-4 py-3 text-center">{row.reussite}</td>
-                <td className="px-4 py-3 text-center">{row.usage}</td>
+                <td className="px-2 py-2 text-center">{row.reussite}</td>
+                <td className="px-2 py-2 text-center">{row.usage}</td>
                 {focusLabels.map((label) => (
-                  <td key={label} className="px-4 py-3 text-center">
+                  <td key={label} className="px-2 py-2 text-center">
                     {row[label]}
                   </td>
                 ))}
