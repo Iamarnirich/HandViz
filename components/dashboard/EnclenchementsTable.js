@@ -6,99 +6,101 @@ import { useMatch } from "@/contexts/MatchContext";
 
 export default function EnclenchementsTable({ data }) {
   const { rapport } = useRapport();
-  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
-
-  const focusTypes = ["2vs2", "duel", "bloc", "écran"];
-
-  const calculerLignes = (nomEquipe, typeRapport) => {
-    if (!nomEquipe && !isTousLesMatchs) return [];
-
-    const equipe = (nomEquipe || "").toLowerCase();
-    const stats = {};
-    let totalEnclenchements = 0;
-
-    data.forEach((e) => {
-      const encl = e.enclenchement?.trim();
-      if (!encl) return;
-
-      const tempsFort = e.temps_fort?.toLowerCase() || "";
-      const action = e.nom_action?.toLowerCase() || "";
-      const resultat =
-        typeRapport === "offensif"
-          ? e.resultat_cthb?.toLowerCase() || ""
-          : e.resultat_limoges?.toLowerCase() || "";
-
-      const estBonneEquipe =
-        isTousLesMatchs || action.includes(equipe) || resultat.includes(equipe);
-      if (!estBonneEquipe) return;
-
-      if (!stats[encl]) {
-        stats[encl] = {
-          total: 0,
-          succes: 0,
-          focus: {
-            "2vs2": { total: 0, succes: 0 },
-            duel: { total: 0, succes: 0 },
-            bloc: { total: 0, succes: 0 },
-            écran: { total: 0, succes: 0 },
-          },
-        };
-      }
-
-      stats[encl].total++;
-      totalEnclenchements++;
-
-      const estReussi =
-        resultat.includes("but " + equipe) ||
-        resultat.includes("7m obtenu " + equipe) ||
-        resultat.includes("2' obtenu");
-
-      if (estReussi) stats[encl].succes++;
-
-      focusTypes.forEach((type) => {
-        if (tempsFort.includes(type)) {
-          stats[encl].focus[type].total++;
-          if (estReussi) stats[encl].focus[type].succes++;
-        }
-      });
-    });
-
-    return Object.entries(stats)
-      .map(([label, valeurs]) => {
-        const ligne = {
-          enclenchement: label,
-          reussite:
-            valeurs.total > 0
-              ? ((valeurs.succes / valeurs.total) * 100).toFixed(1) + "%"
-              : "0%",
-          // 🔹 Utilisation en FRACTION brute
-          utilisation: `${valeurs.total} / ${totalEnclenchements}`,
-        };
-
-        focusTypes.forEach((type) => {
-          const f = valeurs.focus[type];
-          ligne[type] =
-            f.total > 0 ? ((f.succes / f.total) * 100).toFixed(1) + "%" : "0%";
-        });
-
-        return ligne;
-      })
-      .sort(
-        (a, b) =>
-          parseInt(b.utilisation.split("/")[0]) -
-          parseInt(a.utilisation.split("/")[0])
-      );
-  };
+  const { equipeLocale, isTousLesMatchs } = useMatch();
 
   const lignes = useMemo(() => {
-    if (rapport === "offensif") return calculerLignes(equipeLocale, "offensif");
-    if (rapport === "defensif")
-      return calculerLignes(equipeAdverse, "defensif");
-    return [];
-  }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs]);
+    if (rapport !== "offensif" && rapport !== "defensif") return [];
+
+    const typesFocus = ["2vs2", "duel", "bloc", "écran"];
+    const equipe = (equipeLocale || "").toLowerCase();
+
+    const estBonneEquipe = (evt) => {
+      if (isTousLesMatchs) return true;
+      const action = (evt.nom_action || "").toLowerCase();
+      const resultat = (evt.resultat_cthb || "").toLowerCase();
+      return action.includes(equipe) || resultat.includes(equipe);
+    };
+
+    const estSucces = (evt) => {
+      const resultat = (evt.resultat_cthb || "").toLowerCase();
+
+      if (rapport === "offensif") {
+        return (
+          (equipe && resultat.includes("but " + equipe)) ||
+          (equipe && resultat.includes("7m obtenu " + equipe)) ||
+          resultat.includes("2' obtenu")
+        );
+      } else {
+        // Défensif : succès = échec adverse
+        return (
+          resultat.includes("tir hc") ||
+          resultat.includes("arrêt") ||
+          resultat.includes("perte de balle")
+        );
+      }
+    };
+
+    const parEnclenchement = new Map();
+    data.forEach((evt) => {
+      const encl = (evt.enclenchement || "").trim();
+      if (!encl) return;
+      if (!estBonneEquipe(evt)) return;
+      if (!parEnclenchement.has(encl)) parEnclenchement.set(encl, []);
+      parEnclenchement.get(encl).push(evt);
+    });
+
+    const totalEvenements = Array.from(parEnclenchement.values()).reduce(
+      (acc, arr) => acc + arr.length,
+      0
+    );
+
+    const lignesCalculees = [];
+    for (const [encl, evenements] of parEnclenchement.entries()) {
+      const succesGlobal = evenements.filter(estSucces).length;
+      const pourcentageReussite =
+        evenements.length > 0
+          ? ((succesGlobal / evenements.length) * 100).toFixed(1) + "%"
+          : "0%";
+
+      const utilisation = `${evenements.length} / ${totalEvenements || 0}`;
+
+      const ligne = {
+        enclenchement: encl,
+        reussite: pourcentageReussite,
+        usage: utilisation,
+      };
+
+      typesFocus.forEach((type) => {
+        const sousEnsemble = evenements.filter((evt) =>
+          (evt.temps_fort || "").toLowerCase().includes(type)
+        );
+        const denominateur = sousEnsemble.length;
+        const numerateur = sousEnsemble.filter(estSucces).length;
+
+        ligne[type] =
+          denominateur > 0
+            ? `${((numerateur / denominateur) * 100).toFixed(
+                1
+              )}% (${denominateur})`
+            : "0% (0)";
+      });
+
+      lignesCalculees.push(ligne);
+    }
+
+    lignesCalculees.sort((a, b) => {
+      const aCount = parseInt(a.usage.split("/")[0].trim() || "0", 10);
+      const bCount = parseInt(b.usage.split("/")[0].trim() || "0", 10);
+      return bCount - aCount;
+    });
+
+    return lignesCalculees;
+  }, [data, rapport, equipeLocale, isTousLesMatchs]);
 
   if ((rapport !== "offensif" && rapport !== "defensif") || lignes.length === 0)
     return null;
+
+  const labelsFocus = ["2vs2", "duel", "bloc", "écran"];
 
   return (
     <div className="w-full max-w-6xl mx-auto">
@@ -109,7 +111,7 @@ export default function EnclenchementsTable({ data }) {
               <th className="px-2 py-2 text-left font-medium">Enclenchement</th>
               <th className="px-2 py-2 text-center font-medium">% Réussite</th>
               <th className="px-2 py-2 text-center font-medium">Utilisation</th>
-              {focusTypes.map((label) => (
+              {labelsFocus.map((label) => (
                 <th
                   key={label}
                   className="px-2 py-2 text-center font-medium whitespace-nowrap"
@@ -126,8 +128,8 @@ export default function EnclenchementsTable({ data }) {
                   {row.enclenchement}
                 </td>
                 <td className="px-2 py-2 text-center">{row.reussite}</td>
-                <td className="px-2 py-2 text-center">{row.utilisation}</td>
-                {focusTypes.map((label) => (
+                <td className="px-2 py-2 text-center">{row.usage}</td>
+                {labelsFocus.map((label) => (
                   <td key={label} className="px-2 py-2 text-center">
                     {row[label]}
                   </td>
