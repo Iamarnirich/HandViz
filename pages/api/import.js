@@ -61,6 +61,28 @@ export default async function handler(req, res) {
     }
 
     match_id = newMatch.id;
+    // 🔹 Lier les clubs directement après la création du match
+    const { data: clubLocal } = await supabase
+      .from("clubs")
+      .select("id")
+      .ilike("nom", equipe_locale)
+      .maybeSingle();
+
+    const { data: clubVisiteur } = await supabase
+      .from("clubs")
+      .select("id")
+      .ilike("nom", equipe_visiteuse)
+      .maybeSingle();
+
+    if (clubLocal || clubVisiteur) {
+      await supabase
+        .from("matchs")
+        .update({
+          club_locale_id: clubLocal?.id || null,
+          club_visiteuse_id: clubVisiteur?.id || null,
+        })
+        .eq("id", match_id);
+    }
   }
 
   for (const rowRaw of rows) {

@@ -42,11 +42,13 @@ function DashboardLayout() {
         .from("matchs")
         .select(
           "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match"
-        );
+        )
+        .order("date_match", { ascending: false });
 
       const { data: evenementsData } = await supabase
         .from("evenements")
-        .select("*");
+        .select("*")
+        .range(0, 10000);
 
       const { data: clubsData } = await supabase
         .from("clubs")
@@ -54,7 +56,7 @@ function DashboardLayout() {
 
       const { data: joueusesData } = await supabase
         .from("joueuses")
-        .select("id, nom, photo_url, club_id");
+        .select("id, nom, photo_url, equipe"); // ✅ correction : 'equipe' au lieu de 'club_id'
 
       const clubsMap = {};
       (clubsData || []).forEach((club) => {
@@ -75,6 +77,20 @@ function DashboardLayout() {
     };
 
     fetchAll();
+
+    // ✅ Option : écoute temps réel pour rafraîchir après import
+    const sub = supabase
+      .channel("rt-matchs")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "matchs" },
+        fetchAll
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sub);
+    };
   }, [
     setEquipeLocale,
     setEquipeAdverse,
@@ -110,31 +126,38 @@ function DashboardLayout() {
     : evenements;
 
   const selectedMatch = matchs.find((m) => m.id === matchId);
-  const clubLocal = selectedMatch ? clubs[selectedMatch.club_locale_id] : null;
-  const clubVisiteur = selectedMatch
-    ? clubs[selectedMatch.club_visiteuse_id]
-    : null;
 
-  const getScore = (club) => {
-    const nomClub = club?.nom?.toLowerCase();
-    if (!nomClub) return 0;
+  // ✅ fallback si club_*_id non renseigné
+  const clubLocal =
+    (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
+    (selectedMatch
+      ? { nom: selectedMatch.equipe_locale, logo: "/placeholder.png" }
+      : null);
+  const clubVisiteur =
+    (selectedMatch && clubs[selectedMatch.club_visiteuse_id]) ||
+    (selectedMatch
+      ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.png" }
+      : null);
+
+  const getScore = (club, isLocale) => {
+    if (!club) return 0;
     return filteredEvents.filter((e) => {
-      const resCthb = e.resultat_cthb?.toLowerCase() || "";
-      const resLimoges = e.resultat_limoges?.toLowerCase() || "";
-      const isButCthb =
-        resCthb.startsWith("but") &&
-        !resCthb.includes("encaiss") &&
-        resCthb.includes(nomClub);
-      const isButLimoges =
-        resLimoges.startsWith("but") &&
-        !resLimoges.includes("encaiss") &&
-        resLimoges.includes(nomClub);
-      return isButCthb || isButLimoges;
+      if (isLocale) {
+        return (
+          e.resultat_cthb?.toLowerCase().startsWith("but") &&
+          !e.resultat_cthb?.toLowerCase().includes("encaiss")
+        );
+      } else {
+        return (
+          e.resultat_limoges?.toLowerCase().startsWith("but") &&
+          !e.resultat_limoges?.toLowerCase().includes("encaiss")
+        );
+      }
     }).length;
   };
 
-  const scoreLocal = getScore(clubLocal);
-  const scoreVisiteur = getScore(clubVisiteur);
+  const scoreLocal = getScore(clubLocal, true);
+  const scoreVisiteur = getScore(clubVisiteur, false);
 
   if (loading) {
     return (
@@ -144,17 +167,17 @@ function DashboardLayout() {
     );
   }
 
+  // ✅ filtre joueuses basé sur nom équipe, pas UUID
   const joueusesFiltered = matchId
     ? joueuses.filter(
         (j) =>
-          j.equipe === selectedMatch?.club_locale_id ||
-          j.equipe === selectedMatch?.club_visiteuse_id
+          j.equipe === selectedMatch?.equipe_locale ||
+          j.equipe === selectedMatch?.equipe_visiteuse
       )
     : joueuses;
 
-  const selectedJoueuse = joueuses.find(
-    (j) => Number(j.id) === Number(joueuseId)
-  );
+  // ✅ comparaison UUID → UUID
+  const selectedJoueuse = joueuses.find((j) => j.id === joueuseId);
 
   return (
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
@@ -176,7 +199,7 @@ function DashboardLayout() {
       {matchId && clubLocal && clubVisiteur && (
         <div className="mt-4 w-fit mx-auto flex flex-col items-center gap-1">
           <p className="text-sm font-semibold text-gray-600">
-            J1 – {selectedMatch.date_match}
+            {selectedMatch.date_match}
           </p>
           <div className="flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1]">
             <div className="flex items-center gap-3">

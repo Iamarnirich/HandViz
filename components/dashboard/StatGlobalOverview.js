@@ -61,7 +61,7 @@ function getColor(title, value, rapport) {
       case "Balles récupérées":
         return num >= 11 ? "text-green-600" : "text-red-600";
       //case "Tirs Hors-Cadre":
-      //return num >= 11 ? "text-green-600" : "text-red-600";
+      //return num >=  ? "text-green-600" : "text-red-600";
       case "Total tirs reçus":
         return num <= 50 ? "text-green-600" : "text-red-600";
       case "Neutralisations réalisées":
@@ -104,10 +104,19 @@ export default function StatGlobalOverview({ data, matchCount }) {
       const result = {};
       for (const key in obj) {
         if (typeof obj[key] === "number") {
+          // Moyenne simple
           result[key] = (obj[key] / matchCount).toFixed(1);
         } else if (typeof obj[key] === "object") {
+          // Moyenne récursive pour objets enfants
           result[key] = divideStats(obj[key]);
+        } else if (
+          typeof obj[key] === "string" &&
+          !isNaN(parseFloat(obj[key]))
+        ) {
+          // Si c'est une string numérique (ex: indices formatés), on la moyenne aussi
+          result[key] = (parseFloat(obj[key]) / matchCount).toFixed(2);
         } else {
+          // Sinon on laisse tel quel
           result[key] = obj[key];
         }
       }
