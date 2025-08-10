@@ -7,15 +7,15 @@ import { useRapport } from "@/contexts/RapportContext";
 
 // Nouveau positionnement inspiré du schéma fourni
 const secteurs = {
-  ALG: { top: "20%", left: "18%" },
-  ALD: { top: "20%", left: "82%" },
-  "1-2G": { top: "42%", left: "28%" },
-  "Central 6m": { top: "37%", left: "50%" },
-  "1-2D": { top: "42%", left: "72%" },
-  "Central 7-9m": { top: "45%", left: "50%" },
-  "Central 9m": { top: "64%", left: "50%" },
-  ARD: { top: "64%", left: "82%" },
-  ARG: { top: "64%", left: "20%" },
+  ALG: { top: "10%", left: "15%" },
+  ALD: { top: "10%", left: "85%" },
+  "1-2G": { top: "35%", left: "23%" },
+  "Central 6m": { top: "30%", left: "50%" },
+  "1-2D": { top: "35%", left: "79%" },
+  "Central 7-9m": { top: "38%", left: "50%" },
+  "Central 9m": { top: "55%", left: "50%" },
+  ARD: { top: "55%", left: "85%" },
+  ARG: { top: "55%", left: "15%" },
   "7M": { label: "7m", top: "80%", left: "50%" },
 };
 
