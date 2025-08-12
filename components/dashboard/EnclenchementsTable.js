@@ -62,7 +62,7 @@ export default function EnclenchementsTable({ data }) {
           ? ((succesGlobal / evenements.length) * 100).toFixed(1) + "%"
           : "0%";
 
-      const utilisation = `${evenements.length} / ${totalEvenements || 0}`;
+      const utilisation = `${evenements.length}`;
 
       const ligne = {
         enclenchement: encl,

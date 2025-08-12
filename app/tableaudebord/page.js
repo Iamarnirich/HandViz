@@ -199,7 +199,7 @@ function DashboardLayout() {
       {matchId && clubLocal && clubVisiteur && (
         <div className="mt-4 w-fit mx-auto flex flex-col items-center gap-1">
           <p className="text-sm font-semibold text-gray-600">
-            {selectedMatch.date_match}
+            J1 -{selectedMatch.date_match}
           </p>
           <div className="flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1]">
             <div className="flex items-center gap-3">
