@@ -60,8 +60,6 @@ function getColor(title, value, rapport) {
         return num >= 13 ? "text-green-600" : "text-red-600";
       case "Balles récupérées":
         return num >= 11 ? "text-green-600" : "text-red-600";
-      //case "Tirs Hors-Cadre":
-      //return num >=  ? "text-green-600" : "text-red-600";
       case "Total tirs reçus":
         return num <= 50 ? "text-green-600" : "text-red-600";
       case "Neutralisations réalisées":
@@ -80,7 +78,7 @@ function getColor(title, value, rapport) {
 export default function StatGlobalOverview({ data, matchCount }) {
   const { rapport } = useRapport();
   const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
-  // 🔍 LOGS pour analyser les doublons
+
   useEffect(() => {
     if (isTousLesMatchs) {
       const ids = data.map((e) => e.id_match);
@@ -99,10 +97,14 @@ export default function StatGlobalOverview({ data, matchCount }) {
   const stats = useMemo(() => {
     if ((!equipeLocale || !equipeAdverse) && !isTousLesMatchs) return {};
 
-    const filtreEquipe = (str, nom) =>
-      typeof str === "string" &&
-      typeof nom === "string" &&
-      str.toLowerCase().includes(nom.toLowerCase());
+    const norm = (s) => (s || "").toLowerCase().trim();
+
+    // Possession "Possession Equipe_Adverse_"
+    const parsePossession = (txt) => {
+      const s = norm(txt);
+      const m = s.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+      return m ? { equipe: m[1].trim(), adv: m[2].trim() } : null;
+    };
 
     const initPhaseStats = () => ({
       total: 0,
@@ -113,156 +115,257 @@ export default function StatGlobalOverview({ data, matchCount }) {
       jt: 0,
     });
 
-    const normalize = (txt) => (txt || "").toLowerCase();
-
-    const divideStats = (obj) => {
-      const result = {};
-      for (const key in obj) {
-        if (typeof obj[key] === "number") {
-          // Moyenne simple
-          result[key] = (obj[key] / matchCount).toFixed(1);
-        } else if (typeof obj[key] === "object") {
-          // Moyenne récursive pour objets enfants
-          result[key] = divideStats(obj[key]);
-        } else if (
-          typeof obj[key] === "string" &&
-          !isNaN(parseFloat(obj[key]))
-        ) {
-          // Si c'est une string numérique (ex: indices formatés), on la moyenne aussi
-          result[key] = (parseFloat(obj[key]) / matchCount).toFixed(2);
-        } else {
-          // Sinon on laisse tel quel
-          result[key] = obj[key];
+    // Déduit "notre" équipe si non fournie
+    const inferTeam = () => {
+      const counts = {};
+      const bump = (name) => {
+        if (!name) return;
+        const n = name.toLowerCase().trim();
+        counts[n] = (counts[n] || 0) + 1;
+      };
+      const teamRegexes = [
+        /^attaque\s+([^\(]+)/i,
+        /^ca\s+([^\(]+)/i,
+        /^er\s+([^\(]+)/i,
+        /^mb\s+([^\(]+)/i,
+        /^transition\s+([^\(]+)/i,
+      ];
+      data.forEach((row) => {
+        const a = norm(row.nom_action);
+        for (const rx of teamRegexes) {
+          const m = a.match(rx);
+          if (m) {
+            bump(m[1]);
+            break;
+          }
         }
-      }
-      return result;
+        const cthb = norm(row.resultat_cthb);
+        const m1 = cthb.match(
+          /^(but|tir\s+contré|tir\s+arr[ée]t[ée]|tir\s+hc|perte\s+de\s+balle|2'\s+obtenu|7m\s+obtenu)\s+([^\s]+)/i
+        );
+        if (m1) bump(m1[2]);
+      });
+      let best = "";
+      let max = 0;
+      Object.entries(counts).forEach(([k, v]) => {
+        if (v > max) {
+          max = v;
+          best = k;
+        }
+      });
+      return best;
     };
 
-    const nomEquipe = equipeLocale?.toLowerCase?.() || "";
-    const nomEquipeAdv = equipeAdverse?.toLowerCase?.() || "";
+    const team = norm(equipeLocale) || inferTeam();
+    const oppHint = norm(equipeAdverse);
 
+    // Tous les enregistrements "possession"
+    const possRows = data.filter((r) => !!parsePossession(r.possession));
+
+    // Matchs où la team est impliquée (dans la colonne possession)
+    const matchIdsWithTeam = new Set(
+      possRows
+        .filter((r) => {
+          const p = parsePossession(r.possession);
+          if (!p) return false;
+          if (!team) return false;
+          return p.equipe === team || p.adv === team;
+        })
+        .map((r) => r.id_match)
+        .filter(Boolean)
+    );
+
+    // Dénominateur correct pour la moyenne (tous les matchs de la team)
+    const gamesTeam = Math.max(1, matchIdsWithTeam.size);
+
+    // Helper moyenne récursive (pour les AUTRES cartes). On évite "possessions".
+    const divideStats = (obj) => {
+      if (!isTousLesMatchs || gamesTeam < 2) return obj;
+      const out = {};
+      for (const k in obj) {
+        if (k === "possessions") {
+          out[k] = obj[k]; // possessions déjà converties en moyenne manuellement
+          continue;
+        }
+        const v = obj[k];
+        if (typeof v === "number") {
+          out[k] = Number((v / gamesTeam).toFixed(1));
+        } else if (v && typeof v === "object") {
+          out[k] = divideStats(v);
+        } else {
+          out[k] = v;
+        }
+      }
+      return out;
+    };
+
+    const filtreEquipe = (str, nom) =>
+      typeof str === "string" &&
+      typeof nom === "string" &&
+      str.toLowerCase().includes(nom.toLowerCase());
+
+    // ===================== DÉFENSIF =====================
     if (rapport === "defensif") {
       const result = {
         possessions: initPhaseStats(),
         butsEncaisses: initPhaseStats(),
         arrets: initPhaseStats(),
         tirsHorsCadreAdv: initPhaseStats(),
-        tirsContres: initPhaseStats(),
         tirsTotaux: initPhaseStats(),
         ballesRecuperees: initPhaseStats(),
         neutralisationsReal: { total: 0 },
         deuxMinSubies: { total: 0 },
         septMSubis: { total: 0 },
-        indiceAgressivite: { total: "-" },
+        indiceAgressivite: { total: "—" },
       };
 
       let butsAP = 0;
       let neutralAP = 0;
 
+      // --- POSSESSIONS DEF (moyenne) ---
+      // total des possessions dans les matchs de la team
+      const totalPossInTeamMatches = possRows.filter((r) =>
+        matchIdsWithTeam.has(r.id_match)
+      ).length;
+      // possessions de la team (OFF) dans ces mêmes matchs
+      const offPossCount = possRows.filter((r) => {
+        const p = parsePossession(r.possession);
+        return p && p.equipe === team && matchIdsWithTeam.has(r.id_match);
+      }).length;
+      // possessions adverses = total - off
+      const defPossCount = Math.max(0, totalPossInTeamMatches - offPossCount);
+      // moyenne par match
+      result.possessions.total = Number((defPossCount / gamesTeam).toFixed(1));
+
+      // Sous‑phases AP/ER/CA/MB/JT dépendantes de la possession adverse
+      const defPossRows = possRows.filter((r) => {
+        const p = parsePossession(r.possession);
+        return p && p.equipe !== team && matchIdsWithTeam.has(r.id_match);
+      });
+      const countStarts = (prefix, eq) =>
+        defPossRows.reduce((acc, r) => {
+          const a = norm(r.nom_action);
+          return acc + (a.startsWith(prefix + " " + eq) ? 1 : 0);
+        }, 0);
+
+      // On n’a pas un seul "eq" ici (plusieurs adversaires possibles). On compte par ligne.
+      // Pour être robuste, on teste contre p.equipe (adverse ligne par ligne)
+      let ap = 0,
+        ca = 0,
+        er = 0,
+        mb = 0,
+        jt = 0;
+      for (const r of defPossRows) {
+        const p = parsePossession(r.possession);
+        if (!p) continue;
+        const a = norm(r.nom_action);
+        if (a.startsWith("attaque " + p.equipe)) ap++;
+        if (a.startsWith("ca " + p.equipe)) ca++;
+        if (a.startsWith("er " + p.equipe)) er++;
+        if (a.startsWith("mb " + p.equipe)) mb++;
+        if (a.startsWith("transition " + p.equipe)) jt++;
+      }
+      // moyenne par match
+      result.possessions.ap = Number((ap / gamesTeam).toFixed(1));
+      result.possessions.ca = Number((ca / gamesTeam).toFixed(1));
+      result.possessions.er = Number((er / gamesTeam).toFixed(1));
+      result.possessions.mb = Number((mb / gamesTeam).toFixed(1));
+      result.possessions.jt = Number((jt / gamesTeam).toFixed(1));
+
+      // --- Autres cartes (inchangé)
       data.forEach((e) => {
-        const action = normalize(e.nom_action);
-        const possession = normalize(e.possession);
-        const resultat = normalize(e.resultat_limoges);
+        const action = norm(e.nom_action);
+        const resultat = norm(e.resultat_limoges);
+        const nomEquipeAdv = oppHint;
 
         const isAdv =
-          filtreEquipe(action, nomEquipeAdv) ||
-          filtreEquipe(resultat, nomEquipeAdv) ||
-          filtreEquipe(possession, nomEquipeAdv);
-        const isAP = action.startsWith("attaque " + nomEquipeAdv);
+          (nomEquipeAdv &&
+            (filtreEquipe(action, nomEquipeAdv) ||
+              filtreEquipe(resultat, nomEquipeAdv))) ||
+          (!nomEquipeAdv &&
+            team &&
+            !filtreEquipe(action, team) &&
+            !filtreEquipe(resultat, team));
+
+        const isAP = nomEquipeAdv
+          ? action.startsWith("attaque " + nomEquipeAdv)
+          : team
+          ? !action.startsWith("attaque " + team) &&
+            action.startsWith("attaque ")
+          : false;
+
         const phaseKeys = {
-          ca: action.startsWith("ca " + nomEquipeAdv),
-          er: action.startsWith("er " + nomEquipeAdv),
-          mb: action.startsWith("mb " + nomEquipeAdv),
-          jt: action.startsWith("transition " + nomEquipeAdv),
+          ca: nomEquipeAdv
+            ? action.startsWith("ca " + nomEquipeAdv)
+            : team
+            ? action.startsWith("ca ") && !action.startsWith("ca " + team)
+            : false,
+          er: nomEquipeAdv
+            ? action.startsWith("er " + nomEquipeAdv)
+            : team
+            ? action.startsWith("er ") && !action.startsWith("er " + team)
+            : false,
+          mb: nomEquipeAdv
+            ? action.startsWith("mb " + nomEquipeAdv)
+            : team
+            ? action.startsWith("mb ") && !action.startsWith("mb " + team)
+            : false,
+          jt: nomEquipeAdv
+            ? action.startsWith("transition " + nomEquipeAdv)
+            : team
+            ? action.startsWith("transition ") &&
+              !action.startsWith("transition " + team)
+            : false,
         };
 
-        // Dans la partie DEFENSIF
         if (isAdv) {
           const inc = (key, incrementTotal = true) => {
-            // On incrémente total seulement si demandé
-            if (incrementTotal) {
-              result[key].total++;
-            }
-
-            // AP
-            if (isAP && result[key].ap !== undefined) {
-              result[key].ap++;
-            }
-
-            // Phases spécifiques
+            if (incrementTotal) result[key].total++;
+            if (isAP && result[key].ap !== undefined) result[key].ap++;
             if (phaseKeys.ca && result[key].ca !== undefined) result[key].ca++;
             if (phaseKeys.er && result[key].er !== undefined) result[key].er++;
             if (phaseKeys.mb && result[key].mb !== undefined) result[key].mb++;
             if (phaseKeys.jt && result[key].jt !== undefined) result[key].jt++;
           };
 
-          if (
-            possession.startsWith(
-              "possession " + nomEquipeAdv + "_" + nomEquipe + "_"
-            )
-          ) {
-            inc("possessions");
-          }
-
-          // Buts encaissés strict
-          if (
-            resultat.startsWith("but " + nomEquipeAdv) &&
-            !resultat.includes("encaissé")
-          ) {
+          if (resultat.startsWith("but ") && !resultat.includes("encaissé")) {
             inc("butsEncaisses");
             if (isAP) butsAP++;
           }
-
-          // Tirs hors cadre adverses strict
-          if (resultat.startsWith("tir hc " + nomEquipeAdv))
-            inc("tirsHorsCadreAdv");
-
-          // Arrêts GB strict
+          if (resultat.includes("tir hc ")) inc("tirsHorsCadreAdv");
           if (
-            resultat.startsWith("tir arrêté " + nomEquipeAdv) ||
-            resultat.startsWith("tir arret " + nomEquipeAdv)
-          ) {
+            resultat.includes("tir arrêté ") ||
+            resultat.includes("tir arret ")
+          )
             inc("arrets");
-          }
-          // Total tirs reçus strict
           if (
-            resultat.startsWith("but " + nomEquipeAdv) ||
-            resultat.startsWith("tir contré " + nomEquipeAdv) ||
-            resultat.startsWith("tir hc " + nomEquipeAdv) ||
-            resultat.startsWith("tir arrêté " + nomEquipeAdv) ||
-            resultat.startsWith("tir arret " + nomEquipeAdv)
+            resultat.startsWith("but ") ||
+            resultat.includes("tir contré ") ||
+            resultat.includes("tir hc ") ||
+            resultat.includes("tir arrêté ") ||
+            resultat.includes("tir arret ")
           ) {
             inc("tirsTotaux");
           }
-          // Balles récupérées strict
-          if (resultat.startsWith("perte de balle " + nomEquipeAdv))
-            inc("ballesRecuperees");
-
-          if (
-            resultat.includes(nomEquipeAdv) &&
-            resultat.includes("neutralisée")
-          ) {
+          if (resultat.includes("perte de balle ")) inc("ballesRecuperees");
+          if (resultat.includes("neutralisée")) {
             result.neutralisationsReal.total++;
             if (isAP) neutralAP++;
           }
-
-          // 2 minutes subies strict
-          if (resultat.startsWith("exclusion " + nomEquipeAdv))
-            result.deuxMinSubies.total++;
-
-          // 7m subis strict
-          if (resultat.startsWith("7m conc " + nomEquipeAdv))
-            result.septMSubis.total++;
+          if (resultat.startsWith("exclusion ")) result.deuxMinSubies.total++;
+          if (resultat.startsWith("7m conc ")) result.septMSubis.total++;
         }
       });
 
       result.indiceAgressivite.total =
-        butsAP > 0 ? (neutralAP / butsAP).toFixed(2) : "—";
+        butsAP > 0 ? Number((neutralAP / butsAP).toFixed(2)) : "—";
 
-      return matchCount > 1 ? divideStats(result) : result;
+      // moyenne sur tous les matchs pour les autres cartes
+      return isTousLesMatchs ? divideStats(result) : result;
     }
 
-    const globalStats = {
+    // ===================== OFFENSIF =====================
+    const resultOff = {
       tirsTotal: initPhaseStats(),
       tirsRates: initPhaseStats(),
       buts: initPhaseStats(),
@@ -271,127 +374,123 @@ export default function StatGlobalOverview({ data, matchCount }) {
       neutralisations: { total: 0 },
       deuxMinutes: { total: 0 },
       jets7m: { total: 0 },
-      indiceContinuite: { total: "-" },
+      indiceContinuite: { total: "—" },
     };
 
     let butsAP = 0;
     let neutralAP = 0;
 
+    // --- POSSESSIONS OFF (moyenne) ---
+    const offPossRows = possRows.filter((r) => {
+      const p = parsePossession(r.possession);
+      return p && p.equipe === team && matchIdsWithTeam.has(r.id_match);
+    });
+    const offPossCount = offPossRows.length;
+    resultOff.possessions.total = Number((offPossCount / gamesTeam).toFixed(1));
+
+    // Sous‑phases AP/ER/CA/MB/JT dépendantes de la possession de la team
+    let ap = 0,
+      ca = 0,
+      er = 0,
+      mb = 0,
+      jt = 0;
+    for (const r of offPossRows) {
+      const p = parsePossession(r.possession);
+      if (!p) continue;
+      const a = norm(r.nom_action);
+      if (a.startsWith("attaque " + p.equipe)) ap++;
+      if (a.startsWith("ca " + p.equipe)) ca++;
+      if (a.startsWith("er " + p.equipe)) er++;
+      if (a.startsWith("mb " + p.equipe)) mb++;
+      if (a.startsWith("transition " + p.equipe)) jt++;
+    }
+    resultOff.possessions.ap = Number((ap / gamesTeam).toFixed(1));
+    resultOff.possessions.ca = Number((ca / gamesTeam).toFixed(1));
+    resultOff.possessions.er = Number((er / gamesTeam).toFixed(1));
+    resultOff.possessions.mb = Number((mb / gamesTeam).toFixed(1));
+    resultOff.possessions.jt = Number((jt / gamesTeam).toFixed(1));
+
+    // --- Autres cartes (inchangé)
     data.forEach((e) => {
-      const action = normalize(e.nom_action);
-      const possession = normalize(e.possession);
-      const resultat = normalize(e.resultat_cthb);
+      const action = norm(e.nom_action);
+      const resultat = norm(e.resultat_cthb);
 
       const isLocal =
-        filtreEquipe(action, nomEquipe) ||
-        filtreEquipe(resultat, nomEquipe) ||
-        filtreEquipe(possession, nomEquipe);
-      const isAP = action.startsWith("attaque " + nomEquipe);
+        team && (filtreEquipe(action, team) || filtreEquipe(resultat, team));
+
+      const isAP = team ? action.startsWith("attaque " + team) : false;
       const phaseKeys = {
-        ca: action.startsWith("ca " + nomEquipe),
-        er: action.startsWith("er " + nomEquipe),
-        mb: action.startsWith("mb " + nomEquipe),
-        jt: action.startsWith("transition " + nomEquipe),
+        ca: team ? action.startsWith("ca " + team) : false,
+        er: team ? action.startsWith("er " + team) : false,
+        mb: team ? action.startsWith("mb " + team) : false,
+        jt: team ? action.startsWith("transition " + team) : false,
       };
 
-      // Dans la partie OFFENSIF
       if (isLocal) {
         const inc = (key, incrementTotal = true) => {
-          if (incrementTotal) {
-            globalStats[key].total++;
-          }
-
-          if (isAP && globalStats[key].ap !== undefined) {
-            globalStats[key].ap++;
-          }
-
-          if (phaseKeys.ca && globalStats[key].ca !== undefined)
-            globalStats[key].ca++;
-          if (phaseKeys.er && globalStats[key].er !== undefined)
-            globalStats[key].er++;
-          if (phaseKeys.mb && globalStats[key].mb !== undefined)
-            globalStats[key].mb++;
-          if (phaseKeys.jt && globalStats[key].jt !== undefined)
-            globalStats[key].jt++;
+          if (incrementTotal) resultOff[key].total++;
+          if (isAP && resultOff[key].ap !== undefined) resultOff[key].ap++;
+          if (phaseKeys.ca && resultOff[key].ca !== undefined)
+            resultOff[key].ca++;
+          if (phaseKeys.er && resultOff[key].er !== undefined)
+            resultOff[key].er++;
+          if (phaseKeys.mb && resultOff[key].mb !== undefined)
+            resultOff[key].mb++;
+          if (phaseKeys.jt && resultOff[key].jt !== undefined)
+            resultOff[key].jt++;
         };
-        if (possession.startsWith("possession " + nomEquipe)) {
-          inc("possessions");
-        }
-        // Tirs ratés strict
+
         if (
-          resultat.startsWith("tir contré " + nomEquipe) ||
-          resultat.startsWith("tir arrêté " + nomEquipe) ||
-          resultat.startsWith("tir arret " + nomEquipe) ||
-          resultat.startsWith("tir hc " + nomEquipe)
+          resultat.startsWith("tir contré " + team) ||
+          resultat.startsWith("tir arrêté " + team) ||
+          resultat.startsWith("tir arret " + team) ||
+          resultat.startsWith("tir hc " + team)
         ) {
           inc("tirsRates");
         }
 
-        // Buts marqués strict
         if (
-          resultat.startsWith("but " + nomEquipe) &&
+          resultat.startsWith("but " + team) &&
           !resultat.includes("encaissé")
         ) {
           inc("buts");
           if (isAP) butsAP++;
         }
 
-        // Pertes de balle strict
-        if (resultat.startsWith("perte de balle " + nomEquipe)) {
+        if (resultat.startsWith("perte de balle " + team)) {
           inc("pertesBalle");
         }
 
-        // Total tirs strict
         if (
-          resultat.startsWith("but " + nomEquipe) ||
-          resultat.startsWith("tir contré " + nomEquipe) ||
-          resultat.startsWith("tir hc " + nomEquipe) ||
-          resultat.startsWith("tir arrêté " + nomEquipe) ||
-          resultat.startsWith("tir arret " + nomEquipe)
+          resultat.startsWith("but " + team) ||
+          resultat.startsWith("tir contré " + team) ||
+          resultat.startsWith("tir hc " + team) ||
+          resultat.startsWith("tir arrêté " + team) ||
+          resultat.startsWith("tir arret " + team)
         ) {
           inc("tirsTotal");
         }
 
-        if (resultat.includes(nomEquipe) && resultat.includes("neutralisée")) {
-          globalStats.neutralisations.total++;
+        if (resultat.includes(team) && resultat.includes("neutralisée")) {
+          resultOff.neutralisations.total++;
           if (isAP) neutralAP++;
         }
 
-        // 2 min obtenues strict
-        if (resultat.startsWith("2' obtenu " + nomEquipe))
-          globalStats.deuxMinutes.total++;
-
-        // 7m obtenus strict
-        if (resultat.startsWith("7m obtenu " + nomEquipe))
-          globalStats.jets7m.total++;
+        if (resultat.startsWith("2' obtenu " + team))
+          resultOff.deuxMinutes.total++;
+        if (resultat.startsWith("7m obtenu " + team)) resultOff.jets7m.total++;
       }
     });
 
-    globalStats.indiceContinuite.total =
-      neutralAP > 0 ? (butsAP / neutralAP).toFixed(2) : "—";
+    resultOff.indiceContinuite.total =
+      neutralAP > 0 ? Number((butsAP / neutralAP).toFixed(2)) : "—";
 
-    console.log("MatchCount détecté:", matchCount);
-    console.log("Total BUTS AVANT moyenne:", globalStats?.buts?.total);
-
-    const butsParMatch = {};
-    data.forEach((e) => {
-      if (!butsParMatch[e.id_match]) butsParMatch[e.id_match] = 0;
-      if (
-        e.resultat_cthb?.toLowerCase().startsWith("but") &&
-        !e.resultat_cthb?.toLowerCase().includes("encaiss")
-      ) {
-        butsParMatch[e.id_match]++;
-      }
-    });
-    console.log("Buts par match:", butsParMatch);
-
-    return matchCount > 1 ? divideStats(globalStats) : globalStats;
-  }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs, matchCount]);
+    // moyenne sur tous les matchs pour les autres cartes
+    return isTousLesMatchs ? divideStats(resultOff) : resultOff;
+  }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs]);
 
   const formatSub = (stat, title) => {
     if (!stat || typeof stat.ap === "undefined") return null;
-
-    const isExtended = true;
 
     const skipSubStats =
       rapport === "offensif" &&
