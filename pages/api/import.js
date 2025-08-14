@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     }
 
     match_id = newMatch.id;
-    // 🔹 Lier les clubs directement après la création du match
+    // Lier les clubs directement après la création du match
     const { data: clubLocal } = await supabase
       .from("clubs")
       .select("id")

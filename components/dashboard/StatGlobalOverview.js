@@ -16,63 +16,81 @@ import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
 function getColor(title, value, rapport) {
-  if (value === undefined || value === "—") return "text-[#1a1a1a]";
+  if (value === undefined || value === "—") return "bg-white text-[#1a1a1a]";
   const num = parseFloat(value);
 
   if (rapport === "offensif") {
     switch (title) {
       case "Possessions":
-        return num >= 55 ? "text-green-600" : "text-red-600";
+        return num >= 55
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Buts marqués":
-        return num >= 32 ? "text-green-600" : "text-red-600";
+        return num >= 32
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Pertes de balle":
         return num <= 1
-          ? "text-blue-600"
+          ? "bg-[#B6D8F2] text-black"
           : num < 10
-          ? "text-green-600"
-          : "text-red-600";
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Tirs ratés":
-        return num > 13 ? "text-red-600" : "text-green-600";
+        return num > 13 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
       case "Tirs total":
-        return num < 55 ? "text-red-600" : "text-green-600";
+        return num < 55 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
       case "Neutralisations":
-        return num > 17 ? "text-red-600" : "text-green-600";
+        return num > 17 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
       case "2 Min obtenues":
         return num > 3
-          ? "text-blue-600"
+          ? "bg-[#B6D8F2] text-black"
           : num < 3
-          ? "text-red-600"
-          : "text-green-600";
+          ? "bg-[#FFBFB0] text-black"
+          : "bg-[#9FCDA8] text-black";
       case "7 m obtenus":
-        return num > 5.5 ? "text-red-600" : "text-blue-600";
+        return num > 5.5
+          ? "bg-[#FFBFB0] text-black"
+          : "bg-[#B6D8F2] text-black";
       default:
-        return "text-[#1a1a1a]";
+        return "bg-white text-[#1a1a1a]";
     }
   }
 
   if (rapport === "defensif") {
     switch (title) {
       case "Possessions":
-        return num >= 54 ? "text-green-600" : "text-red-600";
+        return num >= 54
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Buts encaissés":
-        return num <= 29 ? "text-green-600" : "text-red-600";
+        return num <= 29
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Arrêts de GB":
-        return num >= 13 ? "text-green-600" : "text-red-600";
+        return num >= 13
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Balles récupérées":
-        return num >= 11 ? "text-green-600" : "text-red-600";
+        return num >= 11
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Total tirs reçus":
-        return num <= 50 ? "text-green-600" : "text-red-600";
+        return num <= 50
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "Neutralisations réalisées":
-        return num >= 21 ? "text-green-600" : "text-red-600";
+        return num >= 21
+          ? "bg-[#9FCDA8] text-black"
+          : "bg-[#FFBFB0] text-black";
       case "2 min subies":
-        return num > 2 ? "text-red-600" : "text-green-600";
+        return num > 2 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
       case "7m subis":
-        return num > 3 ? "text-red-600" : "text-green-600";
+        return num > 3 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
       default:
-        return "text-[#1a1a1a]";
+        return "bg-white text-[#1a1a1a]";
     }
   }
-  return "text-[#1a1a1a]";
+  return "bg-white text-[#1a1a1a]";
 }
 
 export default function StatGlobalOverview({ data, matchCount }) {
@@ -671,16 +689,18 @@ export default function StatGlobalOverview({ data, matchCount }) {
           return (
             <div
               key={idx}
-              className="bg-white border border-[#E4CDA1] rounded-xl shadow p-4 min-h-[130px] flex flex-col justify-between items-center hover:scale-[1.02] transition-transform"
+              className={`border border-[#E4CDA1] rounded-xl shadow p-4 min-h-[130px] flex flex-col justify-between items-center hover:scale-[1.02] transition-transform ${getColor(
+                card.title,
+                value,
+                rapport
+              )}`}
             >
               <div className="flex items-center gap-2">
                 <Icon className={`h-5 w-5 ${card.iconColor}`} />
-                <h4 className="text-s font-semibold text-gray-700">
-                  {card.title}
-                </h4>
+                <h4 className="text-s font-semibold">{card.title}</h4>
               </div>
               <div
-                className={`text-xl font-extrabold text-center ${colorClass} ${
+                className={`text-xl font-extrabold text-center ${
                   !formatSub(card.stat, card.title)
                     ? "flex-grow flex items-center justify-center"
                     : ""

@@ -11,9 +11,9 @@ const IMPACT_GRID = [
 ];
 
 const getColor = (eff) => {
-  if (eff >= 75) return "bg-[green] text-white";
-  if (eff >= 50) return "bg-[#fdcb6e] text-black";
-  if (eff > 0) return "bg-[red] text-black";
+  if (eff >= 75) return "bg-[#9FCDA8] text-white";
+  if (eff >= 50) return "bg-[#FFD4A1] text-black";
+  if (eff > 0) return "bg-[#FFBFB0] text-black";
   return "bg-[#dfe6e9] text-black";
 };
 

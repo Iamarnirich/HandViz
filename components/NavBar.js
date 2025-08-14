@@ -28,6 +28,116 @@ export default function NavBar() {
 
   if (checkingSession) return null;
 
+  // -------- helpers --------
+  const normalizeMatchName = (filename) =>
+    filename
+      .replace(/^Données_?/i, "")
+      .replace(/\.(xlsx|csv)$/i, "")
+      .replace(/_/g, " ")
+      .trim();
+
+  async function parseXlsx(file) {
+    const XLSX = await import("xlsx");
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }); // defval: "" => pas d'undefined
+    return rows;
+  }
+
+  async function parseCsv(file) {
+    const Papa = (await import("papaparse")).default;
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false,
+        transformHeader: (h) => (h || "").trim(),
+        delimiter: "", // autodetect
+        complete: (res) => {
+          // Nettoie les lignes vides résiduelles et trim des valeurs
+          const rows = (res.data || []).map((row) => {
+            const out = {};
+            Object.keys(row).forEach((k) => {
+              const v = row[k];
+              out[k] = typeof v === "string" ? v.trim() : v;
+            });
+            return out;
+          });
+          resolve(rows);
+        },
+        error: (err) => reject(err),
+      });
+    });
+  }
+
+  async function handleImportChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const name = file.name;
+      const ext = (name.split(".").pop() || "").toLowerCase();
+
+      let rows = [];
+      if (ext === "xlsx") {
+        rows = await parseXlsx(file);
+      } else if (ext === "csv") {
+        rows = await parseCsv(file);
+      } else {
+        alert("Format non supporté. Choisis un .xlsx ou un .csv");
+        return;
+      }
+
+      const matchNom = normalizeMatchName(name);
+
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchNom, rows }),
+      });
+
+      const ct = res.headers.get("content-type") || "";
+      let payload = null;
+      if (ct.includes("application/json")) {
+        try {
+          payload = await res.json();
+        } catch {
+          payload = null;
+        }
+      } else {
+        const text = await res.text();
+        payload = text ? { message: text } : null;
+      }
+
+      console.log("Import response:", {
+        status: res.status,
+        statusText: res.statusText,
+        contentType: ct,
+        payload,
+      });
+
+      if (!res.ok) {
+        const msg =
+          payload?.error ||
+          payload?.message ||
+          `Erreur serveur (${res.status} ${res.statusText})`;
+        alert("Erreur d'import : " + msg);
+        return;
+      }
+
+      alert(payload?.message || "Fichier importé avec succès !");
+      // -> rafraîchis ton state/route si besoin
+      // router.refresh();
+    } catch (err) {
+      console.error("Erreur lors de l'import :", err);
+      alert(err?.message || "Une erreur est survenue pendant l'import.");
+    } finally {
+      // reset input pour permettre un nouvel import du même fichier
+      e.target.value = "";
+    }
+  }
+
   return (
     <>
       {/* Barre supérieure */}
@@ -50,57 +160,20 @@ export default function NavBar() {
           <div className="flex items-center gap-3">
             {connected && (
               <>
-                {/* Bouton Import Excel */}
+                {/* Bouton Import (xlsx + csv) */}
                 <label
-                  htmlFor="xlsxUpload"
+                  htmlFor="fileUpload"
                   className="px-4 py-1 cursor-pointer rounded-full bg-[#D4AF37] text-white hover:bg-[#b3974e] transition"
                 >
                   Importer Match
                 </label>
 
                 <input
-                  id="xlsxUpload"
+                  id="fileUpload"
                   type="file"
-                  accept=".xlsx"
+                  accept=".xlsx,.csv"
                   className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-
-                    try {
-                      const XLSX = await import("xlsx");
-                      const arrayBuffer = await file.arrayBuffer();
-                      const workbook = XLSX.read(arrayBuffer);
-                      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                      const jsonData = XLSX.utils.sheet_to_json(sheet);
-
-                      const matchNom = file.name
-                        .replace(/^Données_?/i, "")
-                        .replace(/\.xlsx$/i, "")
-                        .replace(/_/g, " ")
-                        .trim();
-
-                      const res = await fetch("/api/import", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ matchNom, rows: jsonData }),
-                      });
-
-                      if (res.ok) {
-                        alert("Fichier importé avec succès !");
-                      } else {
-                        const data = await res.json();
-                        alert(
-                          "Erreur d'import : " +
-                            (data?.error || "Erreur inconnue")
-                        );
-                        console.error(data);
-                      }
-                    } catch (err) {
-                      console.error("Erreur lors de l'import :", err);
-                      alert("Une erreur est survenue pendant l'import.");
-                    }
-                  }}
+                  onChange={handleImportChange}
                 />
               </>
             )}

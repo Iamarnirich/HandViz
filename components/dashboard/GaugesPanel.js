@@ -10,6 +10,7 @@ import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
+// ---------- couleurs ----------
 function getGaugeColor(label, value, rapport) {
   if (value === undefined || value === null || isNaN(value)) return "#999";
 
@@ -19,7 +20,7 @@ function getGaugeColor(label, value, rapport) {
       "Eff. Attaque Placée": 55,
       "Eff. Grand Espace": 60,
       "Eff. Supériorité": 75,
-      "Eff. Infériorité": 50, // seuil par défaut
+      "Eff. Infériorité": 50,
       "Eff. Tirs (hors 7m)": 60,
       "% tirs en Duel Direct": 50,
       "% Réussite Duel Direct": 50,
@@ -46,281 +47,422 @@ function getGaugeColor(label, value, rapport) {
   const sens = sensInverse.includes(label) ? "inf" : "sup";
 
   if (!seuil) return "#D4AF37";
-
   if (sens === "sup") {
-    if (value >= seuil + 5) return "#003366"; // bleu
-    if (value >= seuil) return "#4CAF50"; // vert
-    return "#F44336"; // rouge
+    if (value >= seuil + 5) return "#B6D8F2";
+    if (value >= seuil) return "#9FCDA8";
+    return "#F44336";
   } else {
-    if (value <= seuil - 5) return "#003366"; // bleu
-    if (value <= seuil) return "#4CAF50"; // vert
-    return "#F44336"; // rouge
+    if (value <= seuil - 5) return "#B6D8F2";
+    if (value <= seuil) return "#9FCDA8";
+    return "#F44336";
   }
+}
+
+// ---------- helpers ----------
+const norm = (s) => (s || "").toLowerCase().trim();
+
+function parsePossession(txt) {
+  const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+  return m ? { teamA: m[1].trim(), teamB: m[2].trim() } : null;
+}
+
+function inferTeamsForMatch(events, eqLocal, eqAdv) {
+  // si déjà fournis, on garde
+  if (eqLocal && eqAdv) return { team: norm(eqLocal), opp: norm(eqAdv) };
+
+  // score les noms trouvés après les verbes + dans "possession A_B_"
+  const counts = new Map();
+  const bump = (n) => {
+    if (!n) return;
+    const k = norm(n);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  };
+
+  const verbRx = /^(attaque|ca|er|mb|transition)\s+([^\(]+)/i;
+
+  events.forEach((e) => {
+    const a = norm(e?.nom_action);
+    const m = a.match(verbRx);
+    if (m) bump(m[2]);
+
+    const p = parsePossession(e?.possession);
+    if (p) {
+      bump(p.teamA);
+      bump(p.teamB);
+    }
+
+    // indics issus des résultats
+    const r1 = norm(e?.resultat_cthb);
+    const r2 = norm(e?.resultat_limoges);
+    const m1 = r1.match(/^(but|tir|perte|7m|2')\s+([^\s]+)/i);
+    const m2 = r2.match(/^(but|tir|perte|7m|exclusion)\s+([^\s]+)/i);
+    if (m1) bump(m1[2]);
+    if (m2) bump(m2[2]);
+  });
+
+  // ordonne par fréquence
+  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  const guessTeam = eqLocal ? norm(eqLocal) : sorted[0]?.[0] || "";
+  const guessOpp = eqAdv
+    ? norm(eqAdv)
+    : sorted.find(([name]) => name !== guessTeam)?.[0] || "";
+
+  return { team: guessTeam, opp: guessOpp };
+}
+
+function avgPctAndCount(items) {
+  // items: [{num, den, pct}]
+  const valid = items.filter((x) => (x.den || 0) > 0);
+  const n = valid.length;
+  if (n === 0) return { pct: 0, num: 0, den: 0, matches: 0 };
+
+  const pct = valid.reduce((s, x) => s + x.pct, 0) / n;
+  const num = valid.reduce((s, x) => s + x.num, 0) / n;
+  const den = valid.reduce((s, x) => s + x.den, 0) / n;
+  return { pct, num, den, matches: n };
 }
 
 export default function GaugesPanel({ data, range = "all" }) {
   const { rapport } = useRapport();
-  const { equipeLocale, equipeAdverse, isTousLesMatchs, matchs } = useMatch();
+  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
 
   const stats = useMemo(() => {
-    const ZONES_DUELS = [
-      "aile gauche",
-      "aile droite",
-      "central 6m",
-      "1-2d",
-      "1-2g",
-    ];
+    const labelsOrder =
+      rapport === "defensif"
+        ? [
+            "Efficacité déf. Globale",
+            "Efficacité déf. Placée",
+            "Efficacité déf. GE",
+            "Eff. en Inf. Numérique",
+            "% Tirs en Duel reçus",
+            "% Réussite Duel Adv",
+          ]
+        : [
+            "Eff. Globale",
+            "Eff. Attaque Placée",
+            "Eff. Grand Espace",
+            "Eff. Tirs (hors 7m)",
+            "Tirs en Attaque Placée",
+            "Tirs sur 7m",
+            "Eff. Supériorité",
+            "Eff. Infériorité",
+            "% tirs en Duel Direct",
+            "% Réussite Duel Direct",
+          ];
 
-    const eqLocal = (equipeLocale || "").toLowerCase();
-    const eqAdv = (equipeAdverse || "").toLowerCase();
-    const diviseur = isTousLesMatchs ? matchs?.length || 1 : 1;
+    // 1) regroupe par match
+    const byMatch = new Map();
+    (data || []).forEach((e) => {
+      const id = e?.id_match || "_unknown";
+      if (!byMatch.has(id)) byMatch.set(id, []);
+      byMatch.get(id).push(e);
+    });
+    const matchIds = Array.from(byMatch.keys());
+    const matchCount = matchIds.length;
 
-    if (rapport === "defensif") {
-      let possessionsAdv = 0,
-        butsRecus = 0,
-        apAdv = 0,
-        geAdv = 0,
-        butsAP = 0,
-        butsGE = 0,
-        SupAdv = 0,
-        butsInf = 0,
-        tirsAP = 0,
-        tirsDuel = 0,
-        butsDuel = 0;
+    // 2) calcule par match
+    const perMatch = matchIds.map((id) => {
+      const evts = byMatch.get(id) || [];
+      const { team, opp } = inferTeamsForMatch(
+        evts,
+        equipeLocale,
+        equipeAdverse
+      );
 
-      data.forEach((e) => {
-        const action = e.nom_action?.toLowerCase() || "";
-        const resultat = e.resultat_limoges?.toLowerCase() || "";
-        const secteur = e.secteur?.toLowerCase() || "";
-        const nombre = e.nombre?.toLowerCase() || "";
+      // si on n’a rien à quoi se raccrocher, renvoie 0 partout (évite le 111%)
+      if (!team && !opp) {
+        const empty = {};
+        labelsOrder.forEach((l) => (empty[l] = { num: 0, den: 0, pct: 0 }));
+        return empty;
+      }
 
-        const isAdverse = isTousLesMatchs
-          ? true
-          : action.includes(eqAdv) || resultat.includes(eqAdv);
+      const ZONES_DUELS = [
+        "aile gauche",
+        "aile droite",
+        "central 6m",
+        "1-2d",
+        "1-2g",
+      ];
+      const L = {}; // label -> {num, den, pct}
 
-        if (isAdverse) {
-          if (action.includes(`possession ${eqAdv}`)) possessionsAdv++;
-          if (resultat.includes(`but ${eqAdv}`)) butsRecus++;
+      if (rapport === "defensif") {
+        let possAdv = 0,
+          butsRecus = 0,
+          possAP = 0,
+          possGE = 0,
+          butsAP = 0,
+          butsGE = 0,
+          supPoss = 0,
+          butsInf = 0,
+          tirsAP = 0,
+          tirsDuel = 0,
+          butsDuel = 0;
 
-          const isAP = action.includes(`attaque ${eqAdv}`);
-          const isGE =
-            action.includes(`ca ${eqAdv}`) ||
-            action.includes(`er ${eqAdv}`) ||
-            action.includes(`mb ${eqAdv}`) ||
-            action.includes(`transition ${eqAdv}`);
+        evts.forEach((e) => {
+          const a = norm(e?.nom_action);
+          const r = norm(e?.resultat_limoges);
+          const sect = norm(e?.secteur);
+          const nb = norm(e?.nombre);
+          const p = norm(e?.possession);
 
-          if (isAP) {
-            apAdv++;
-            if (resultat.includes(`but ${eqAdv}`)) butsAP++;
-            if (secteur) tirsAP++;
-            if (ZONES_DUELS.some((z) => secteur.includes(z))) {
+          // on borne bien au camp adverse
+          const isOppAction =
+            opp &&
+            (a.includes(` ${opp}`) ||
+              r.includes(` ${opp}`) ||
+              p.includes(` ${opp}`));
+
+          if (isOppAction) {
+            if (p.includes(`possession ${opp}`)) possAdv++;
+            if (r.startsWith(`but ${opp}`)) butsRecus++;
+
+            const isAP = a.startsWith(`attaque ${opp}`);
+            const isGE =
+              a.startsWith(`ca ${opp}`) ||
+              a.startsWith(`er ${opp}`) ||
+              a.startsWith(`mb ${opp}`) ||
+              a.startsWith(`transition ${opp}`);
+
+            if (isAP) {
+              if (p.includes(`possession ${opp}`)) possAP++;
+              if (r.startsWith(`but ${opp}`)) butsAP++;
+              if (sect) tirsAP++;
+              if (ZONES_DUELS.some((z) => sect.includes(z))) {
+                tirsDuel++;
+                if (r.includes("but")) butsDuel++;
+              }
+            }
+
+            if (isGE) {
+              if (p.includes(`possession ${opp}`)) possGE++;
+              if (r.startsWith(`but ${opp}`)) butsGE++;
+            }
+
+            if (nb.includes("supériorité")) {
+              if (p.includes(`possession ${opp}`)) supPoss++;
+              if (r.startsWith(`but ${opp}`)) butsInf++;
+            }
+          }
+        });
+
+        L["Efficacité déf. Globale"] = {
+          num: butsRecus,
+          den: possAdv,
+          pct: possAdv > 0 ? (butsRecus / possAdv) * 100 : 0,
+        };
+        L["Efficacité déf. Placée"] = {
+          num: butsAP,
+          den: possAP,
+          pct: possAP > 0 ? (butsAP / possAP) * 100 : 0,
+        };
+        L["Efficacité déf. GE"] = {
+          num: butsGE,
+          den: possGE,
+          pct: possGE > 0 ? (butsGE / possGE) * 100 : 0,
+        };
+        L["Eff. en Inf. Numérique"] = {
+          num: Math.max(0, supPoss - butsInf),
+          den: supPoss,
+          pct: supPoss > 0 ? (1 - butsInf / supPoss) * 100 : 0,
+        };
+        L["% Tirs en Duel reçus"] = {
+          num: tirsDuel,
+          den: tirsAP,
+          pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0,
+        };
+        L["% Réussite Duel Adv"] = {
+          num: butsDuel,
+          den: tirsDuel,
+          pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0,
+        };
+      } else {
+        // offensif
+        let poss = 0,
+          possAP = 0,
+          possGE = 0,
+          tirsAP = 0,
+          butsAP = 0,
+          tirs7m = 0,
+          buts7m = 0,
+          tirsH7 = 0,
+          butsH7 = 0,
+          supPoss = 0,
+          butsSup = 0,
+          infPoss = 0,
+          butsInf = 0,
+          tirsDuel = 0,
+          butsDuel = 0,
+          butsGE = 0,
+          AP = 0;
+
+        evts.forEach((e) => {
+          const a = norm(e?.nom_action);
+          const r = norm(e?.resultat_cthb);
+          const sect = norm(e?.secteur);
+          const nb = norm(e?.nombre);
+          const p = norm(e?.possession);
+
+          const isTeamEvt =
+            team &&
+            (a.includes(` ${team}`) ||
+              r.includes(` ${team}`) ||
+              p.startsWith(`possession ${team}`));
+          if (!isTeamEvt) return;
+
+          if (p.startsWith(`possession ${team}`)) poss++;
+          if (
+            a.startsWith(`attaque ${team}`) &&
+            p.startsWith(`possession ${team}`)
+          )
+            possAP++;
+          if (
+            (a.startsWith(`ca ${team}`) ||
+              a.startsWith(`er ${team}`) ||
+              a.startsWith(`mb ${team}`) ||
+              a.startsWith(`transition ${team}`)) &&
+            p.startsWith(`possession ${team}`)
+          )
+            possGE++;
+
+          if (nb.includes("supériorité") && p.startsWith(`possession ${team}`))
+            supPoss++;
+          if (nb.includes("infériorité") && p.startsWith(`possession ${team}`))
+            infPoss++;
+
+          const isTir = r.startsWith(`but ${team}`) || r.startsWith("tir ");
+          if (isTir && !sect.includes("7m")) {
+            tirsH7++;
+            if (r.startsWith(`but ${team}`)) butsH7++;
+          }
+
+          if (a.startsWith(`attaque ${team}`)) {
+            AP++;
+            if (r.startsWith(`but ${team}`)) butsAP++;
+            if (r.startsWith("tir ") || r.startsWith("7m ")) tirsAP++;
+
+            if (ZONES_DUELS.some((z) => sect.includes(z))) {
               tirsDuel++;
-              if (resultat.includes("but")) butsDuel++;
+              if (r.startsWith(`but ${team}`)) butsDuel++;
             }
           }
 
-          if (isGE) {
-            geAdv++;
-            if (resultat.includes(`but ${eqAdv}`)) butsGE++;
+          if (sect.includes("7m")) {
+            tirs7m++;
+            if (r.startsWith(`but ${team}`)) buts7m++;
           }
 
-          if (nombre.includes("supériorité")) {
-            SupAdv++;
-            if (resultat.includes(`but ${eqAdv}`)) butsInf++;
+          if (
+            (a.startsWith(`ca ${team}`) ||
+              a.startsWith(`er ${team}`) ||
+              a.startsWith(`mb ${team}`) ||
+              a.startsWith(`transition ${team}`)) &&
+            r.startsWith(`but ${team}`)
+          ) {
+            butsGE++;
           }
-        }
+
+          if (nb.includes("supériorité") && r.startsWith(`but ${team}`))
+            butsSup++;
+          if (nb.includes("infériorité") && r.startsWith(`but ${team}`))
+            butsInf++;
+        });
+
+        L["Eff. Globale"] = {
+          num: butsH7 + buts7m,
+          den: poss,
+          pct: poss > 0 ? ((butsH7 + buts7m) / poss) * 100 : 0,
+        };
+        L["Eff. Attaque Placée"] = {
+          num: butsAP,
+          den: possAP,
+          pct: possAP > 0 ? (butsAP / possAP) * 100 : 0,
+        };
+        L["Eff. Grand Espace"] = {
+          num: butsGE,
+          den: possGE,
+          pct: possGE > 0 ? (butsGE / possGE) * 100 : 0,
+        };
+        L["Eff. Tirs (hors 7m)"] = {
+          num: butsH7,
+          den: tirsH7,
+          pct: tirsH7 > 0 ? (butsH7 / tirsH7) * 100 : 0,
+        };
+        L["Tirs en Attaque Placée"] = {
+          num: butsAP,
+          den: tirsAP,
+          pct: tirsAP > 0 ? (butsAP / tirsAP) * 100 : 0,
+        };
+        L["Tirs sur 7m"] = {
+          num: buts7m,
+          den: tirs7m,
+          pct: tirs7m > 0 ? (buts7m / tirs7m) * 100 : 0,
+        };
+        L["Eff. Supériorité"] = {
+          num: butsSup,
+          den: supPoss,
+          pct: supPoss > 0 ? (butsSup / supPoss) * 100 : 0,
+        };
+        L["Eff. Infériorité"] = {
+          num: butsInf,
+          den: infPoss,
+          pct: infPoss > 0 ? (butsInf / infPoss) * 100 : 0,
+        };
+        L["% tirs en Duel Direct"] = {
+          num: tirsDuel,
+          den: tirsAP,
+          pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0,
+        };
+        L["% Réussite Duel Direct"] = {
+          num: butsDuel,
+          den: tirsDuel,
+          pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0,
+        };
+      }
+
+      // garantie anti >100
+      labelsOrder.forEach((lb) => {
+        const x = L[lb];
+        if (!x) return;
+        if (x.den > 0) x.pct = Math.min(100, Math.max(0, x.pct));
+        else x.pct = 0;
+        x.num = Math.max(0, x.num);
+        x.den = Math.max(0, x.den);
       });
 
-      const rawStats = [
-        {
-          label: "Efficacité déf. Globale",
-          value:
-            possessionsAdv > 0 ? (1 - butsRecus / possessionsAdv) * 100 : 0,
-          count: `${possessionsAdv - butsRecus}/${possessionsAdv}`,
-        },
-        {
-          label: "Efficacité déf. Placée",
-          value: apAdv > 0 ? (1 - butsAP / apAdv) * 100 : 0,
-          count: `${apAdv - butsAP}/${apAdv}`,
-        },
-        {
-          label: "Efficacité déf. GE",
-          value: geAdv > 0 ? (1 - butsGE / geAdv) * 100 : 0,
-          count: `${geAdv - butsGE}/${geAdv}`,
-        },
-        {
-          label: "Eff. en Inf. Numérique",
-          value: SupAdv > 0 ? (1 - butsInf / SupAdv) * 100 : 0,
-          count: `${SupAdv - butsInf}/${SupAdv}`,
-        },
-        {
-          label: "% Tirs en Duel reçus",
-          value: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0,
-          count: `${tirsDuel}/${tirsAP}`,
-        },
-        {
-          label: "% Réussite Duel Adv",
-          value: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0,
-          count: `${butsDuel}/${tirsDuel}`,
-        },
-      ];
+      return L;
+    });
 
-      return rawStats.map((s) => ({
-        ...s,
-        value: isTousLesMatchs ? s.value / diviseur : s.value,
-        color: getGaugeColor(s.label, s.value, rapport),
-      }));
-    }
-
-    // Rapport offensif
-    let possessions = 0,
-      tirsHors7m = 0,
-      butsHors7m = 0,
-      tirsAP = 0,
-      butsAP = 0,
-      tirs7m = 0,
-      buts7m = 0,
-      tirDuel = 0,
-      butDuel = 0,
-      possAP = 0,
-      possGE = 0,
-      butsGE = 0,
-      supPoss = 0,
-      butsSup = 0,
-      infPoss = 0,
-      butsInf = 0;
-
-    data.forEach((e) => {
-      const action = e.nom_action?.toLowerCase() || "";
-      const resultat = e.resultat_cthb?.toLowerCase() || "";
-      const secteur = e.secteur?.toLowerCase() || "";
-      const nombre = e.nombre?.toLowerCase() || "";
-      const isLocal = isTousLesMatchs
-        ? true
-        : action.includes(eqLocal) || resultat.includes(eqLocal);
-      if (!isLocal) return;
-
-      if (action.includes(`possession ${eqLocal}`)) possessions++;
-      if (action.includes(`attaque ${eqLocal}`)) possAP++;
-      if (
-        action.includes(`ca ${eqLocal}`) ||
-        action.includes(`er ${eqLocal}`) ||
-        action.includes(`mb ${eqLocal}`) ||
-        action.includes(`transition ${eqLocal}`)
-      )
-        possGE++;
-
-      if (nombre.includes("supériorité")) supPoss++;
-      else if (nombre.includes("infériorité")) infPoss++;
-
-      const isTir =
-        resultat.includes("tir") || resultat.includes(`but ${eqLocal}`);
-      if (isTir && !secteur.includes("7m")) {
-        tirsHors7m++;
-        if (resultat.includes(`but ${eqLocal}`)) butsHors7m++;
-      }
-
-      if (action.includes(`attaque ${eqLocal}`)) {
-        tirsAP++;
-        if (resultat.includes(`but ${eqLocal}`)) butsAP++;
-
-        if (ZONES_DUELS.some((z) => secteur.includes(z))) {
-          tirDuel++;
-          if (resultat.includes(`but ${eqLocal}`)) butDuel++;
-        }
-      }
-
-      if (secteur.includes("7m")) {
-        tirs7m++;
-        if (resultat.includes(`but ${eqLocal}`)) buts7m++;
-      }
-
-      if (
-        (action.includes(`ca ${eqLocal}`) ||
-          action.includes(`er ${eqLocal}`) ||
-          action.includes(`mb ${eqLocal}`) ||
-          action.includes(`transition ${eqLocal}`)) &&
-        resultat.includes(`but ${eqLocal}`)
-      ) {
-        butsGE++;
-      }
-
-      if (
-        nombre.includes("supériorité") &&
-        resultat.includes(`but ${eqLocal}`)
-      ) {
-        butsSup++;
-      }
-      if (
-        nombre.includes("infériorité") &&
-        resultat.includes(`but ${eqLocal}`)
-      ) {
-        butsInf++;
+    // 3) sortie : si 1 match => valeurs brutes; sinon moyenne des %
+    const out = labelsOrder.map((label) => {
+      if (matchCount === 1) {
+        const only = perMatch[0][label] || { num: 0, den: 0, pct: 0 };
+        return {
+          label,
+          value: isNaN(only.pct) ? 0 : only.pct,
+          // pas de virgule en 1 match
+          count: `${only.num}/${only.den}`,
+          color: getGaugeColor(label, only.pct, rapport),
+        };
+      } else {
+        const series = perMatch.map(
+          (m) => m[label] || { num: 0, den: 0, pct: 0 }
+        );
+        const { pct, num, den } = avgPctAndCount(series);
+        return {
+          label,
+          value: isNaN(pct) ? 0 : pct,
+          // moyenne affichée avec 1 décimal pour info
+          count: `${num.toFixed(1)}/${den.toFixed(1)}`,
+          color: getGaugeColor(label, pct, rapport),
+        };
       }
     });
 
-    const result = [
-      {
-        label: "Eff. Globale",
-        value:
-          possessions > 0 ? ((butsHors7m + buts7m) / possessions) * 100 : 0,
-        count: `${butsHors7m + buts7m}/${possessions}`,
-      },
-      {
-        label: "Eff. Attaque Placée",
-        value: possAP > 0 ? (butsAP / possAP) * 100 : 0,
-        count: `${butsAP}/${possAP}`,
-      },
-      {
-        label: "Eff. Grand Espace",
-        value: possGE > 0 ? (butsGE / possGE) * 100 : 0,
-        count: `${butsGE}/${possGE}`,
-      },
-      {
-        label: "Eff. Tirs (hors 7m)",
-        value: tirsHors7m > 0 ? (butsHors7m / tirsHors7m) * 100 : 0,
-        count: `${butsHors7m}/${tirsHors7m}`,
-      },
-      {
-        label: "Tirs en Attaque Placée",
-        value: tirsAP > 0 ? (butsAP / tirsAP) * 100 : 0,
-        count: `${butsAP}/${tirsAP}`,
-      },
-      {
-        label: "Tirs sur 7m",
-        value: tirs7m > 0 ? (buts7m / tirs7m) * 100 : 0,
-        count: `${buts7m}/${tirs7m}`,
-      },
-      {
-        label: "Eff. Supériorité",
-        value: supPoss > 0 ? (butsSup / supPoss) * 100 : 0,
-        count: `${butsSup}/${supPoss}`,
-      },
-      {
-        label: "Eff. Infériorité",
-        value: infPoss > 0 ? (butsInf / infPoss) * 100 : 0,
-        count: `${butsInf}/${infPoss}`,
-      },
-      {
-        label: "% tirs en Duel Direct",
-        value: tirsAP > 0 ? (tirDuel / tirsAP) * 100 : 0,
-        count: `${tirDuel}/${tirsAP}`,
-      },
-      {
-        label: "% Réussite Duel Direct",
-        value: tirDuel > 0 ? (butDuel / tirDuel) * 100 : 0,
-        count: `${butDuel}/${tirDuel}`,
-      },
-    ];
-
-    return result.map((s) => ({
-      ...s,
-      value: isTousLesMatchs ? s.value / diviseur : s.value,
-      color: getGaugeColor(s.label, s.value, rapport),
-    }));
-  }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs, matchs]);
+    return out;
+  }, [data, rapport, equipeLocale, equipeAdverse]);
 
   const displayedStats = useMemo(() => {
+    if (!stats) return [];
     if (range === "left") return stats.slice(0, 3);
     if (range === "right") return stats.slice(3, 6);
     if (range === "bottom-left") return stats.slice(6, 8);
@@ -354,7 +496,7 @@ export default function GaugesPanel({ data, range = "all" }) {
               })}
             >
               <div className="text-sm mt-3 font-bold text-[#1a1a1a]">
-                {`${g.value.toFixed(0)}%`}
+                {`${isNaN(g.value) ? 0 : Math.round(g.value)}%`}
               </div>
             </CircularProgressbarWithChildren>
           </div>
