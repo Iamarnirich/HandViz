@@ -357,11 +357,11 @@ export default function StatGlobalOverview({ data, matchCount }) {
           )
             inc("arrets");
           if (
-            resultat.startsWith("but ") ||
-            resultat.includes("tir contré ") ||
-            resultat.includes("tir hc ") ||
-            resultat.includes("tir arrêté ") ||
-            resultat.includes("tir arret ")
+            resultat.startsWith("but " + nomEquipeAdv) ||
+            resultat.includes("tir contré " + nomEquipeAdv) ||
+            resultat.includes("tir hc " + nomEquipeAdv) ||
+            resultat.includes("tir arrêté " + nomEquipeAdv) ||
+            resultat.includes("tir arret " + nomEquipeAdv)
           ) {
             inc("tirsTotaux");
           }
