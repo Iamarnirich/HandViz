@@ -10,7 +10,6 @@ import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
-// ---------- couleurs ----------
 function getGaugeColor(label, value, rapport) {
   if (value === undefined || value === null || isNaN(value)) return "#999";
 
@@ -58,7 +57,6 @@ function getGaugeColor(label, value, rapport) {
   }
 }
 
-// ---------- helpers ----------
 const norm = (s) => (s || "").toLowerCase().trim();
 
 function parsePossession(txt) {
@@ -70,7 +68,6 @@ function inferTeamsForMatch(events, eqLocal, eqAdv) {
   // si déjà fournis, on garde
   if (eqLocal && eqAdv) return { team: norm(eqLocal), opp: norm(eqAdv) };
 
-  // score les noms trouvés après les verbes + dans "possession A_B_"
   const counts = new Map();
   const bump = (n) => {
     if (!n) return;
@@ -91,7 +88,6 @@ function inferTeamsForMatch(events, eqLocal, eqAdv) {
       bump(p.teamB);
     }
 
-    // indics issus des résultats
     const r1 = norm(e?.resultat_cthb);
     const r2 = norm(e?.resultat_limoges);
     const m1 = r1.match(/^(but|tir|perte|7m|2')\s+([^\s]+)/i);
@@ -111,7 +107,6 @@ function inferTeamsForMatch(events, eqLocal, eqAdv) {
 }
 
 function avgPctAndCount(items) {
-  // items: [{num, den, pct}]
   const valid = items.filter((x) => (x.den || 0) > 0);
   const n = valid.length;
   if (n === 0) return { pct: 0, num: 0, den: 0, matches: 0 };
@@ -150,7 +145,7 @@ export default function GaugesPanel({ data, range = "all" }) {
             "% Réussite Duel Direct",
           ];
 
-    // 1) regroupe par match
+    //regroupe par match
     const byMatch = new Map();
     (data || []).forEach((e) => {
       const id = e?.id_match || "_unknown";
@@ -160,7 +155,7 @@ export default function GaugesPanel({ data, range = "all" }) {
     const matchIds = Array.from(byMatch.keys());
     const matchCount = matchIds.length;
 
-    // 2) calcule par match
+    // calcule par match
     const perMatch = matchIds.map((id) => {
       const evts = byMatch.get(id) || [];
       const { team, opp } = inferTeamsForMatch(
@@ -169,7 +164,7 @@ export default function GaugesPanel({ data, range = "all" }) {
         equipeAdverse
       );
 
-      // si on n’a rien à quoi se raccrocher, renvoie 0 partout (évite le 111%)
+      // si on n’a rien à quoi se raccrocher, renvoie 0 partout
       if (!team && !opp) {
         const empty = {};
         labelsOrder.forEach((l) => (empty[l] = { num: 0, den: 0, pct: 0 }));
@@ -224,7 +219,7 @@ export default function GaugesPanel({ data, range = "all" }) {
               a.startsWith(`transition ${opp}`);
 
             if (isAP) {
-              if (p.includes(`possession ${opp}`)) possAP++;
+              possAP++;
               if (r.startsWith(`but ${opp}`)) butsAP++;
               if (sect) tirsAP++;
               if (ZONES_DUELS.some((z) => sect.includes(z))) {
@@ -234,7 +229,7 @@ export default function GaugesPanel({ data, range = "all" }) {
             }
 
             if (isGE) {
-              if (p.includes(`possession ${opp}`)) possGE++;
+              possGE++;
               if (r.startsWith(`but ${opp}`)) butsGE++;
             }
 
@@ -310,17 +305,12 @@ export default function GaugesPanel({ data, range = "all" }) {
           if (!isTeamEvt) return;
 
           if (p.startsWith(`possession ${team}`)) poss++;
+          if (a.startsWith(`attaque ${team}`)) possAP++;
           if (
-            a.startsWith(`attaque ${team}`) &&
-            p.startsWith(`possession ${team}`)
-          )
-            possAP++;
-          if (
-            (a.startsWith(`ca ${team}`) ||
-              a.startsWith(`er ${team}`) ||
-              a.startsWith(`mb ${team}`) ||
-              a.startsWith(`transition ${team}`)) &&
-            p.startsWith(`possession ${team}`)
+            a.startsWith(`ca ${team}`) ||
+            a.startsWith(`er ${team}`) ||
+            a.startsWith(`mb ${team}`) ||
+            a.startsWith(`transition ${team}`)
           )
             possGE++;
 
@@ -432,14 +422,14 @@ export default function GaugesPanel({ data, range = "all" }) {
       return L;
     });
 
-    // 3) sortie : si 1 match => valeurs brutes; sinon moyenne des %
+    // sortie : si 1 match => valeurs brutes; sinon moyenne des %
     const out = labelsOrder.map((label) => {
       if (matchCount === 1) {
         const only = perMatch[0][label] || { num: 0, den: 0, pct: 0 };
         return {
           label,
           value: isNaN(only.pct) ? 0 : only.pct,
-          // pas de virgule en 1 match
+
           count: `${only.num}/${only.den}`,
           color: getGaugeColor(label, only.pct, rapport),
         };

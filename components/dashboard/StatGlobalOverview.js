@@ -240,7 +240,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
       let butsAP = 0;
       let neutralAP = 0;
 
-      // --- POSSESSIONS DEF (moyenne) ---
       // total des possessions dans les matchs de la team
       const totalPossInTeamMatches = possRows.filter((r) =>
         matchIdsWithTeam.has(r.id_match)
@@ -290,7 +289,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
       result.possessions.mb = Number((mb / gamesTeam).toFixed(1));
       result.possessions.jt = Number((jt / gamesTeam).toFixed(1));
 
-      // --- Autres cartes (inchangé)
       data.forEach((e) => {
         const action = norm(e.nom_action);
         const resultat = norm(e.resultat_limoges);
@@ -371,14 +369,14 @@ export default function StatGlobalOverview({ data, matchCount }) {
             if (isAP) neutralAP++;
           }
           if (resultat.startsWith("exclusion ")) result.deuxMinSubies.total++;
-          if (resultat.startsWith("7m conc ")) result.septMSubis.total++;
+          if (resultat.startsWith("7m ") && resultat.includes(nomEquipeAdv))
+            result.septMSubis.total++;
         }
       });
 
       result.indiceAgressivite.total =
         butsAP > 0 ? Number((neutralAP / butsAP).toFixed(2)) : "—";
 
-      // moyenne sur tous les matchs pour les autres cartes
       return isTousLesMatchs ? divideStats(result) : result;
     }
 
@@ -398,7 +396,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
     let butsAP = 0;
     let neutralAP = 0;
 
-    // --- POSSESSIONS OFF (moyenne) ---
     const offPossRows = possRows.filter((r) => {
       const p = parsePossession(r.possession);
       return p && p.equipe === team && matchIdsWithTeam.has(r.id_match);
@@ -406,7 +403,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
     const offPossCount = offPossRows.length;
     resultOff.possessions.total = Number((offPossCount / gamesTeam).toFixed(1));
 
-    // Sous‑phases AP/ER/CA/MB/JT dépendantes de la possession de la team
     let ap = 0,
       ca = 0,
       er = 0,
@@ -428,7 +424,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
     resultOff.possessions.mb = Number((mb / gamesTeam).toFixed(1));
     resultOff.possessions.jt = Number((jt / gamesTeam).toFixed(1));
 
-    // --- Autres cartes (inchangé)
     data.forEach((e) => {
       const action = norm(e.nom_action);
       const resultat = norm(e.resultat_cthb);

@@ -26,7 +26,6 @@ export default function ImportMatchButton() {
       const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
       return json;
     } else {
-      // XLSX (ou autre binaire)
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf);
       const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -49,14 +48,13 @@ export default function ImportMatchButton() {
 
       const matchNom = deriveMatchName(file.name);
 
-      // Envoie à /api/import — tu peux passer { replace: true } si tu veux “remplacer” le match
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           matchNom,
           rows,
-          replace: true, // passe à false si tu préfères ne pas purger avant insertion
+          replace: true,
         }),
       });
 

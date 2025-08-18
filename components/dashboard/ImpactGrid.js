@@ -56,7 +56,7 @@ export default function ImpactGrid({ data }) {
       if (resultat.includes("but")) map[key].buts++;
     });
 
-    // ✅ Moyenne si "Tous les matchs"
+    //Moyenne si "Tous les matchs"
     for (const key in map) {
       map[key].tirs = Math.round(map[key].tirs / nombreDeMatchs);
       map[key].buts = Math.round(map[key].buts / nombreDeMatchs);

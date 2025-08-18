@@ -140,7 +140,6 @@ export default function NavBar() {
 
   return (
     <>
-      {/* Barre supérieure */}
       <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md shadow px-4 py-3">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-4">
@@ -160,7 +159,6 @@ export default function NavBar() {
           <div className="flex items-center gap-3">
             {connected && (
               <>
-                {/* Bouton Import (xlsx + csv) */}
                 <label
                   htmlFor="fileUpload"
                   className="px-4 py-1 cursor-pointer rounded-full bg-[#D4AF37] text-white hover:bg-[#b3974e] transition"
@@ -178,7 +176,6 @@ export default function NavBar() {
               </>
             )}
 
-            {/* Bouton Déconnexion ou Connexion */}
             {connected ? (
               <button
                 onClick={handleLogout}

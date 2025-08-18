@@ -52,7 +52,6 @@ export default function UtilisationSecteursChart({ data }) {
       }
     });
 
-    // ✅ Moyenne si "Tous les matchs"
     let nombreDeMatchs = 1;
     if (isTousLesMatchs) {
       const matchIds = new Set(data.map((e) => e.id_match));

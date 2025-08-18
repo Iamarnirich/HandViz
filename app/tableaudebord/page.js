@@ -127,7 +127,6 @@ function DashboardLayout() {
 
   const selectedMatch = matchs.find((m) => m.id === matchId);
 
-  // ✅ fallback si club_*_id non renseigné
   const clubLocal =
     (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
     (selectedMatch
@@ -167,21 +166,30 @@ function DashboardLayout() {
     );
   }
 
-  // ✅ filtre joueuses basé sur nom équipe, pas UUID
-  const joueusesFiltered = matchId
-    ? joueuses.filter(
-        (j) =>
-          j.equipe === selectedMatch?.equipe_locale ||
-          j.equipe === selectedMatch?.equipe_visiteuse
-      )
-    : joueuses;
+  // ✅ joueuses pour le rapport individuel : uniquement USDK
+  const isIndividuel = rapport === "individuel";
 
-  // ✅ comparaison UUID → UUID
-  const selectedJoueuse = joueuses.find((j) => j.id === joueuseId);
+  const joueusesFiltered = matchId
+    ? joueuses.filter((j) => {
+        if (!isIndividuel) {
+          return (
+            j.equipe === selectedMatch?.equipe_locale ||
+            j.equipe === selectedMatch?.equipe_visiteuse
+          );
+        }
+
+        return (j.equipe || "").toLowerCase() === "usdk";
+      })
+    : joueuses.filter((j) =>
+        !isIndividuel ? true : (j.equipe || "").toLowerCase() === "usdk"
+      );
+
+  const selectedJoueuse = joueuses.find(
+    (j) => String(j.id) === String(joueuseId)
+  );
 
   return (
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
-      {/* Match Selector */}
       <div className="flex justify-center mb-4">
         <select
           onChange={handleMatchChange}
@@ -490,11 +498,7 @@ function DashboardLayout() {
             <>
               <div className="flex justify-center mb-4">
                 <select
-                  onChange={(e) =>
-                    setJoueuseId(
-                      e.target.value === "" ? null : Number(e.target.value)
-                    )
-                  }
+                  onChange={(e) => setJoueuseId(e.target.value || null)}
                   value={joueuseId || ""}
                   className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
