@@ -369,7 +369,8 @@ export default function StatGlobalOverview({ data, matchCount }) {
             result.neutralisationsReal.total++;
             if (isAP) neutralAP++;
           }
-          if (sanction.includes("2' Subies")) result.deuxMinSubies.total++;
+          if (sanction.startsWith("2' ") && sanction.includes("subies"))
+            result.deuxMinSubies.total++;
           if (resultat.startsWith("7m ") && resultat.includes(nomEquipeAdv))
             result.septMSubis.total++;
         }
@@ -491,7 +492,8 @@ export default function StatGlobalOverview({ data, matchCount }) {
           if (isAP) neutralAP++;
         }
 
-        if (sanction.includes("2' Provoc")) resultOff.deuxMinutes.total++;
+        if (sanction.startsWith("2' ") && sanction.includes("provoc"))
+          resultOff.deuxMinutes.total++;
         if (resultat.startsWith("7m obtenu " + team)) resultOff.jets7m.total++;
       }
     });
