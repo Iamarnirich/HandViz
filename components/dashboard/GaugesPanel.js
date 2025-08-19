@@ -218,13 +218,21 @@ export default function GaugesPanel({ data, range = "all" }) {
               a.startsWith(`mb ${opp}`) ||
               a.startsWith(`transition ${opp}`);
 
+            const isShotAny =
+              r.startsWith(`tir `) || r.startsWith(`but ${opp}`);
+            const isSevenM = sect.includes("7m");
+            const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
             if (isAP) {
               possAP++;
               if (r.startsWith(`but ${opp}`)) butsAP++;
-              if (sect) tirsAP++;
-              if (ZONES_DUELS.some((z) => sect.includes(z))) {
+
+              // dénominateur: tirs adverses pris en AP (hors 7m)
+              if (isShotAny && !isSevenM) tirsAP++;
+
+              // Duel adverse: tir AP + zone Duel (hors 7m)
+              if (isShotAny && inDuelZone && !isSevenM) {
                 tirsDuel++;
-                if (r.includes("but")) butsDuel++;
+                if (r.startsWith(`but ${opp}`)) butsDuel++;
               }
             }
 
@@ -314,9 +322,23 @@ export default function GaugesPanel({ data, range = "all" }) {
           )
             possGE++;
 
-          if (nb.includes("supériorité") && a.startsWith(`attaque ${team}`))
+          if (
+            nb.includes("supériorité") &&
+            (a.startsWith(`attaque ${team}`) ||
+              a.startsWith(`ca ${team}`) ||
+              a.startsWith(`er ${team}`) ||
+              a.startsWith(`mb ${team}`) ||
+              a.startsWith(`transition ${team}`))
+          )
             supPoss++;
-          if (nb.includes("infériorité") && a.startsWith(`attaque ${team}`))
+          if (
+            nb.includes("infériorité") &&
+            (a.startsWith(`attaque ${team}`) ||
+              a.startsWith(`ca ${team}`) ||
+              a.startsWith(`er ${team}`) ||
+              a.startsWith(`mb ${team}`) ||
+              a.startsWith(`transition ${team}`))
+          )
             infPoss++;
 
           const isTir = r.startsWith(`but ${team}`) || r.startsWith("tir ");
@@ -324,13 +346,19 @@ export default function GaugesPanel({ data, range = "all" }) {
             tirsH7++;
             if (r.startsWith(`but ${team}`)) butsH7++;
           }
-
+          const isSevenM = sect.includes("7m");
+          const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
           if (a.startsWith(`attaque ${team}`)) {
             AP++;
             if (r.startsWith(`but ${team}`)) butsAP++;
             if (r.startsWith("tir ") || r.startsWith(`but ${team}`)) tirsAP++;
 
-            if (ZONES_DUELS.some((z) => sect.includes(z))) {
+            // Duel adverse: tir AP + zone Duel (hors 7m)
+            if (
+              (r.startsWith("tir ") || r.startsWith(`but ${team}`)) &&
+              inDuelZone &&
+              !isSevenM
+            ) {
               tirsDuel++;
               if (r.startsWith(`but ${team}`)) butsDuel++;
             }
