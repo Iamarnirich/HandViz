@@ -292,6 +292,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
       data.forEach((e) => {
         const action = norm(e.nom_action);
         const resultat = norm(e.resultat_limoges);
+        const sanction = norm(e.sanctions);
         const nomEquipeAdv = oppHint;
 
         const isAdv =
@@ -368,7 +369,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
             result.neutralisationsReal.total++;
             if (isAP) neutralAP++;
           }
-          if (resultat.startsWith("exclusion ")) result.deuxMinSubies.total++;
+          if (sanction.includes("2' Subies")) result.deuxMinSubies.total++;
           if (resultat.startsWith("7m ") && resultat.includes(nomEquipeAdv))
             result.septMSubis.total++;
         }
@@ -427,6 +428,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
     data.forEach((e) => {
       const action = norm(e.nom_action);
       const resultat = norm(e.resultat_cthb);
+      const sanction = norm(e.sanctions);
 
       const isLocal =
         team && (filtreEquipe(action, team) || filtreEquipe(resultat, team));
@@ -489,8 +491,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
           if (isAP) neutralAP++;
         }
 
-        if (resultat.startsWith("2' obtenu " + team))
-          resultOff.deuxMinutes.total++;
+        if (sanction.includes("2' Provoc")) resultOff.deuxMinutes.total++;
         if (resultat.startsWith("7m obtenu " + team)) resultOff.jets7m.total++;
       }
     });

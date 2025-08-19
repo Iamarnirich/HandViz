@@ -314,9 +314,9 @@ export default function GaugesPanel({ data, range = "all" }) {
           )
             possGE++;
 
-          if (nb.includes("supériorité") && p.startsWith(`possession ${team}`))
+          if (nb.includes("supériorité") && a.startsWith(`attaque ${team}`))
             supPoss++;
-          if (nb.includes("infériorité") && p.startsWith(`possession ${team}`))
+          if (nb.includes("infériorité") && a.startsWith(`attaque ${team}`))
             infPoss++;
 
           const isTir = r.startsWith(`but ${team}`) || r.startsWith("tir ");
@@ -328,7 +328,7 @@ export default function GaugesPanel({ data, range = "all" }) {
           if (a.startsWith(`attaque ${team}`)) {
             AP++;
             if (r.startsWith(`but ${team}`)) butsAP++;
-            if (r.startsWith("tir ") || r.startsWith("7m ")) tirsAP++;
+            if (r.startsWith("tir ") || r.startsWith(`but ${team}`)) tirsAP++;
 
             if (ZONES_DUELS.some((z) => sect.includes(z))) {
               tirsDuel++;
@@ -336,7 +336,7 @@ export default function GaugesPanel({ data, range = "all" }) {
             }
           }
 
-          if (sect.includes("7m")) {
+          if (sect.includes("7m") && a.startsWith(`att 7m ${team}`)) {
             tirs7m++;
             if (r.startsWith(`but ${team}`)) buts7m++;
           }
