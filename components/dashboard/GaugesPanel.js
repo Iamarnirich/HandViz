@@ -171,13 +171,7 @@ export default function GaugesPanel({ data, range = "all" }) {
         return empty;
       }
 
-      const ZONES_DUELS = [
-        "aile gauche",
-        "aile droite",
-        "central 6m",
-        "1-2d",
-        "1-2g",
-      ];
+      const ZONES_DUELS = ["ALG", "ALD", "Central 6m", "1-2D", "1-2G"];
       const L = {}; // label -> {num, den, pct}
 
       if (rapport === "defensif") {
@@ -356,8 +350,7 @@ export default function GaugesPanel({ data, range = "all" }) {
             // Duel adverse: tir AP + zone Duel (hors 7m)
             if (
               (r.startsWith("tir ") || r.startsWith(`but ${team}`)) &&
-              inDuelZone &&
-              !isSevenM
+              inDuelZone
             ) {
               tirsDuel++;
               if (r.startsWith(`but ${team}`)) butsDuel++;
