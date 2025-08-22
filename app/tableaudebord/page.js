@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 
 import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
@@ -24,6 +24,11 @@ function DashboardLayout() {
   const [joueuses, setJoueuses] = useState([]);
   const [joueuseId, setJoueuseId] = useState(null);
   const [matchId, setMatchIdLocal] = useState(null);
+
+  // 🚀 NEW: équipe sélectionnée & liste des équipes
+  const [selectedEquipe, setSelectedEquipe] = useState("");
+  const [equipes, setEquipes] = useState([]);
+
   const { rapport, setRapport } = useRapport();
   const [loading, setLoading] = useState(true);
   const [showHistorique, setShowHistorique] = useState(false);
@@ -56,7 +61,7 @@ function DashboardLayout() {
 
       const { data: joueusesData } = await supabase
         .from("joueuses")
-        .select("id, nom, photo_url, equipe"); // ✅ correction : 'equipe' au lieu de 'club_id'
+        .select("id, nom, photo_url, equipe");
 
       const clubsMap = {};
       (clubsData || []).forEach((club) => {
@@ -68,6 +73,23 @@ function DashboardLayout() {
       setClubs(clubsMap);
       setJoueuses(joueusesData || []);
 
+      // 🔎 NEW: construire la liste d’équipes dispo (clubs + équipes vues dans matchs)
+      const setEquipesUnique = new Set(
+        [
+          ...(clubsData || []).map((c) => (c.nom || "").trim()).filter(Boolean),
+          ...(matchsData || []).flatMap((m) => [
+            (m.equipe_locale || "").trim(),
+            (m.equipe_visiteuse || "").trim(),
+          ]),
+        ]
+          .filter(Boolean)
+          .map((n) => n.trim())
+      );
+      setEquipes(
+        Array.from(setEquipesUnique).sort((a, b) => a.localeCompare(b))
+      );
+
+      // reset contexte
       setEquipeLocale(null);
       setEquipeAdverse(null);
       setNomMatch(null);
@@ -78,7 +100,7 @@ function DashboardLayout() {
 
     fetchAll();
 
-    // ✅ Option : écoute temps réel pour rafraîchir après import
+    // ✅ rafraîchit après import
     const sub = supabase
       .channel("rt-matchs")
       .on(
@@ -92,6 +114,34 @@ function DashboardLayout() {
       supabase.removeChannel(sub);
     };
   }, [
+    setEquipeLocale,
+    setEquipeAdverse,
+    setNomMatch,
+    setIdMatch,
+    setIsTousLesMatchs,
+  ]);
+
+  // 🚀 NEW: quand on change d’équipe, si le match sélectionné n’implique pas cette équipe, on reset
+  useEffect(() => {
+    if (!selectedEquipe || !matchId) return;
+    const m = matchs.find((x) => x.id === matchId);
+    if (!m) return;
+    const ok =
+      (m.equipe_locale || "").toLowerCase() === selectedEquipe.toLowerCase() ||
+      (m.equipe_visiteuse || "").toLowerCase() === selectedEquipe.toLowerCase();
+    if (!ok) {
+      // reset sélection de match & contexte
+      setMatchIdLocal(null);
+      setEquipeLocale(null);
+      setEquipeAdverse(null);
+      setNomMatch(null);
+      setIdMatch(null);
+      setIsTousLesMatchs(true);
+    }
+  }, [
+    selectedEquipe,
+    matchId,
+    matchs,
     setEquipeLocale,
     setEquipeAdverse,
     setNomMatch,
@@ -120,6 +170,17 @@ function DashboardLayout() {
       setIsTousLesMatchs(true);
     }
   };
+
+  // 🚀 NEW: matches filtrés selon l’équipe sélectionnée
+  const matchsAffiches = useMemo(() => {
+    if (!selectedEquipe) return matchs;
+    const sel = selectedEquipe.toLowerCase();
+    return matchs.filter(
+      (m) =>
+        (m.equipe_locale || "").toLowerCase() === sel ||
+        (m.equipe_visiteuse || "").toLowerCase() === sel
+    );
+  }, [matchs, selectedEquipe]);
 
   const filteredEvents = matchId
     ? evenements.filter((e) => e.id_match === matchId)
@@ -190,13 +251,27 @@ function DashboardLayout() {
 
   return (
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
-      <div className="flex justify-center mb-4">
+      {/* 🚀 NEW: double sélecteur (Équipe à gauche, Match à droite) */}
+      <div className="flex justify-center items-center gap-3 mb-4">
+        <select
+          value={selectedEquipe}
+          onChange={(e) => setSelectedEquipe(e.target.value)}
+          className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Toutes les équipes</option>
+          {equipes.map((nom) => (
+            <option key={nom} value={nom}>
+              {nom}
+            </option>
+          ))}
+        </select>
+
         <select
           onChange={handleMatchChange}
           className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">Tous les matchs</option>
-          {matchs.map((match) => (
+          {matchsAffiches.map((match) => (
             <option key={match.id} value={match.id}>
               {match.nom_match}
             </option>
