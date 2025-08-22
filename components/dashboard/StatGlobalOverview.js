@@ -507,6 +507,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
 
   const formatSub = (stat, title) => {
     if (!stat || typeof stat.ap === "undefined") return null;
+    if (title === "Possessions") return null;
 
     const skipSubStats =
       rapport === "offensif" &&

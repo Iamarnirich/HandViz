@@ -171,7 +171,7 @@ export default function GaugesPanel({ data, range = "all" }) {
         return empty;
       }
 
-      const ZONES_DUELS = ["ALG", "ALD", "Central 6m", "1-2D", "1-2G"];
+      const ZONES_DUELS = ["alg", "ald", "central 6m", "1-2d", "1-2g"];
       const L = {}; // label -> {num, den, pct}
 
       if (rapport === "defensif") {
@@ -235,10 +235,17 @@ export default function GaugesPanel({ data, range = "all" }) {
               if (r.startsWith(`but ${opp}`)) butsGE++;
             }
 
-            if (nb.includes("supériorité")) {
-              if (p.includes(`possession ${opp}`)) supPoss++;
-              if (r.startsWith(`but ${opp}`)) butsInf++;
-            }
+            if (
+              nb.includes("supériorité") &&
+              (a.startsWith(`attaque ${opp}`) ||
+                a.startsWith(`ca ${opp}`) ||
+                a.startsWith(`er ${opp}`) ||
+                a.startsWith(`mb ${opp}`) ||
+                a.startsWith(`transition ${opp}`))
+            )
+              supPoss++;
+            if (nb.includes("infériorité") && r.startsWith(`but ${opp}`))
+              butsInf++;
           }
         });
 
@@ -258,9 +265,9 @@ export default function GaugesPanel({ data, range = "all" }) {
           pct: possGE > 0 ? (butsGE / possGE) * 100 : 0,
         };
         L["Eff. en Inf. Numérique"] = {
-          num: Math.max(0, supPoss - butsInf),
+          num: butsInf,
           den: supPoss,
-          pct: supPoss > 0 ? (1 - butsInf / supPoss) * 100 : 0,
+          pct: supPoss > 0 ? (butsInf / supPoss) * 100 : 0,
         };
         L["% Tirs en Duel reçus"] = {
           num: tirsDuel,
@@ -345,18 +352,18 @@ export default function GaugesPanel({ data, range = "all" }) {
           if (a.startsWith(`attaque ${team}`)) {
             AP++;
             if (r.startsWith(`but ${team}`)) butsAP++;
-            if (r.startsWith("tir ") || r.startsWith(`but ${team}`)) tirsAP++;
-
-            // Duel adverse: tir AP + zone Duel (hors 7m)
+            // dénominateur 'tirs en AP' (hors 7m) pour rester cohérent
             if (
               (r.startsWith("tir ") || r.startsWith(`but ${team}`)) &&
-              inDuelZone
+              !isSevenM
             ) {
-              tirsDuel++;
-              if (r.startsWith(`but ${team}`)) butsDuel++;
+              tirsAP++;
+              if (inDuelZone) {
+                tirsDuel++;
+                if (r.startsWith(`but ${team}`)) butsDuel++;
+              }
             }
           }
-
           if (sect.includes("7m") && a.startsWith(`att 7m ${team}`)) {
             tirs7m++;
             if (r.startsWith(`but ${team}`)) buts7m++;

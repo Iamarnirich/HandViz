@@ -31,43 +31,64 @@ export default function UtilisationSecteursChart({ data }) {
     const secteurCounts = {};
     const eqLocal = (equipeLocale || "").toLowerCase();
 
-    data.forEach((e) => {
-      const secteur = e.secteur?.trim();
+    // 1) Filtrer d'abord les lignes d'Attaque Placée (AP)
+    const apRows = data.filter((e) => {
+      const action = (e.nom_action || "").toLowerCase().trim();
+      if (!action.startsWith("attaque ")) return false;
+
+      if (rapport === "offensif") {
+        // Offensif : AP de notre équipe
+        if (isTousLesMatchs || !eqLocal) {
+          // en "Tous les matchs", on n’a pas d’équipe locale => on prend toute AP
+          return true;
+        }
+        return action.startsWith(`attaque ${eqLocal}`);
+      } else {
+        // Défensif : AP de l’adversaire (donc pas notre équipe)
+        if (isTousLesMatchs || !eqLocal) {
+          // en "Tous les matchs", pas de repère d’équipe => on prend toute AP
+          return true;
+        }
+        return !action.startsWith(`attaque ${eqLocal}`);
+      }
+    });
+
+    // 2) Sur ces seules AP, compter par secteur
+    apRows.forEach((e) => {
+      const secteur = (e.secteur || "").trim();
       if (!secteur) return;
 
-      let resultat = "";
       if (rapport === "offensif") {
-        resultat = e.resultat_cthb?.toLowerCase() || "";
-        if (isTousLesMatchs || resultat.includes(eqLocal)) {
+        // Si on veut limiter aux actions "de notre équipe" via resultat_cthb quand eqLocale existe
+        const resultat = (e.resultat_cthb || "").toLowerCase();
+        if (isTousLesMatchs || !eqLocal || resultat.includes(eqLocal)) {
           secteurCounts[secteur] = (secteurCounts[secteur] || 0) + 1;
         }
-      } else if (rapport === "defensif") {
-        resultat = e.resultat_limoges?.toLowerCase() || "";
+      } else {
+        // Défensif : côté adverse via resultat_limoges
+        const resultat = (e.resultat_limoges || "").toLowerCase();
         if (
           isTousLesMatchs ||
-          (!resultat.includes(eqLocal) && resultat !== "")
+          !eqLocal ||
+          (resultat && !resultat.includes(eqLocal))
         ) {
           secteurCounts[secteur] = (secteurCounts[secteur] || 0) + 1;
         }
       }
     });
 
+    // 3) Moyenne par match si nécessaire
     let nombreDeMatchs = 1;
     if (isTousLesMatchs) {
-      const matchIds = new Set(data.map((e) => e.id_match));
+      const matchIds = new Set(apRows.map((e) => e.id_match));
       nombreDeMatchs = matchIds.size || 1;
     }
 
     return Object.entries(secteurCounts).map(([secteur, count]) => ({
       secteur,
-      count: Math.round(count / nombreDeMatchs), // ✅ Moyenne
+      count: Math.round(count / nombreDeMatchs),
     }));
   }, [data, equipeLocale, rapport, isTousLesMatchs]);
-
-  const title =
-    rapport === "offensif"
-      ? "Utilisation des secteurs (attaque)"
-      : "Utilisation des secteurs adverses";
 
   return (
     <motion.div
@@ -76,10 +97,6 @@ export default function UtilisationSecteursChart({ data }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <h2 className="text-xl font-bold text-center text-[#111111] mb-6 tracking-wide uppercase">
-        {title}
-      </h2>
-
       {secteursData.length > 0 ? (
         <ResponsiveContainer width="100%" height={360}>
           <BarChart
@@ -109,7 +126,7 @@ export default function UtilisationSecteursChart({ data }) {
                 borderRadius: 8,
                 color: "#fff",
               }}
-              formatter={(v) => [`${v} actions (moy.)`, "Secteur"]}
+              formatter={(v) => [`${v} actions`, "Secteur"]}
             />
             <Bar
               dataKey="count"

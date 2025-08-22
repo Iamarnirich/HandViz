@@ -21,9 +21,17 @@ export default async function handler(req, res) {
     });
   }
 
-  const [equipe_locale, equipe_visiteuse] = rawMatch
+  let [equipe_locale, equipe_visiteuse] = rawMatch
     .split(";")
     .map((s) => s.trim());
+
+  // 🛠️ Force USDK à gauche (locale) si elle est à droite
+  const isUSDK = (s = "") => s.trim().toLowerCase() === "usdk";
+  if (!isUSDK(equipe_locale) && isUSDK(equipe_visiteuse)) {
+    const tmp = equipe_locale;
+    equipe_locale = equipe_visiteuse;
+    equipe_visiteuse = tmp;
+  }
 
   if (!equipe_locale || !equipe_visiteuse) {
     return res.status(400).json({
@@ -229,8 +237,8 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
     dispositif_cthb: String(row["Dispositif USDK"] || "").trim(),
     nombre: String(row["Nombre"] || "").trim(),
     impact: String(row["Impacts"] || "").trim(),
-    phase_rec: String(row["Phase REC"] || "").trim(),
-    phase_vis: String(row["Phase VIS"] || "").trim(),
+    phase_rec: String(row["Phases REC"] || "").trim(),
+    phase_vis: String(row["Phases VIS"] || "").trim(),
     position: String(row["Position"] || "").trim(),
     duree: String(row["Durée"] || "").trim(),
     mi_temps: String(row["Mi-temps"] || "").trim(),
