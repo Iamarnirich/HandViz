@@ -369,7 +369,11 @@ export default function StatGlobalOverview({ data, matchCount }) {
             result.neutralisationsReal.total++;
             if (isAP) neutralAP++;
           }
-          if (sanction.startsWith("2' ") && sanction.includes("subies"))
+          if (
+            action.startsWith("attaque " + nomEquipeAdv) &&
+            sanction.startsWith("2' ") &&
+            sanction.includes("subies")
+          )
             result.deuxMinSubies.total++;
           if (resultat.startsWith("7m ") && resultat.includes(nomEquipeAdv))
             result.septMSubis.total++;
@@ -492,7 +496,11 @@ export default function StatGlobalOverview({ data, matchCount }) {
           if (isAP) neutralAP++;
         }
 
-        if (sanction.startsWith("2' ") && sanction.includes("provoc"))
+        if (
+          action.startsWith("attaque " + team) &&
+          sanction.startsWith("2' ") &&
+          sanction.includes("provoc")
+        )
           resultOff.deuxMinutes.total++;
         if (resultat.startsWith("7m obtenu " + team)) resultOff.jets7m.total++;
       }
@@ -507,6 +515,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
 
   const formatSub = (stat, title) => {
     if (!stat || typeof stat.ap === "undefined") return null;
+
     if (title === "Possessions") return null;
 
     const skipSubStats =
