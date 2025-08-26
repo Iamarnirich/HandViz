@@ -7,6 +7,41 @@ import { useMatch } from "@/contexts/MatchContext";
 
 const COLORS = ["#D4AF37", "#1a1a1a"];
 
+// normalisation sans accents + minuscule
+const norm = (s) =>
+  (s || "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+// helpers de classification (défense)
+const isGoal = (res, adv) => {
+  if (adv) return res.startsWith(`but ${adv}`);
+  return res.startsWith("but ");
+};
+
+const isSave = (res, adv) => {
+  const saveLike =
+    res.includes("tir arrêté ") ||
+    res.includes("tir arrete") || // couvre "arrete" sans espace final
+    res.includes("tir arret ") ||
+    res.includes("tir arret") ||
+    res.includes("tir arrete") ||
+    res.includes("tir arrete") || // redondance volontaire pour robustesse
+    res.includes("tir contre ") ||
+    res.includes("tir contre");
+  if (adv) return saveLike && res.includes(` ${adv}`);
+  return saveLike;
+};
+
+const isMiss = (res, adv) => {
+  const missLike = res.includes("tir hc");
+  if (adv) return missLike && res.includes(` ${adv}`);
+  return missLike;
+};
+
 export default function EventTypePieChart({ data }) {
   const { rapport } = useRapport();
   const { equipeAdverse, isTousLesMatchs } = useMatch();
@@ -18,40 +53,24 @@ export default function EventTypePieChart({ data }) {
     let saves = 0;
     let missed = 0;
 
-    data?.forEach((e) => {
-      const res = e.resultat_limoges?.toLowerCase().trim() || "";
+    const adv = norm(equipeAdverse);
+
+    (data || []).forEach((e) => {
+      const res = norm(e?.resultat_limoges);
+
+      if (!res) return;
 
       if (isTousLesMatchs) {
-        // Tous les matchs → logique générique
-        if (res.includes("but encaissé")) {
-          goals++;
-        } else if (
-          res.includes("neutralisation") ||
-          res.includes("contré") ||
-          res.includes("arrêt") ||
-          res.includes("tir arrêté")
-        ) {
-          saves++;
-        } else if (res.includes("récupération") || res.includes("tir hc")) {
-          missed++;
-        }
+        // Tous les matchs (ou "tous les matchs de l'équipe" -> adv varie)
+        if (isGoal(res, null)) goals++;
+        else if (isSave(res, null)) saves++;
+        else if (isMiss(res, null)) missed++;
       } else {
-        // Un seul match sélectionné → logique ciblée
-        const adv = equipeAdverse?.toLowerCase().trim();
+        // Un match : on borne sur l'adversaire sélectionné
         if (!adv) return;
-
-        if (res === `but encaissé ${adv}`) {
-          goals++;
-        } else if (
-          res === `déf ${adv} neutralisation` ||
-          res === `déf ${adv} contré` ||
-          res === `déf ${adv} arrêt` ||
-          res === `tir arrêté ${adv}`
-        ) {
-          saves++;
-        } else if (res === `récupération ${adv}` || res === `tir hc ${adv}`) {
-          missed++;
-        }
+        if (isGoal(res, adv)) goals++;
+        else if (isSave(res, adv)) saves++;
+        else if (isMiss(res, adv)) missed++;
       }
     });
 

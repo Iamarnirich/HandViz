@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 
 import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
@@ -24,11 +24,7 @@ function DashboardLayout() {
   const [joueuses, setJoueuses] = useState([]);
   const [joueuseId, setJoueuseId] = useState(null);
   const [matchId, setMatchIdLocal] = useState(null);
-
-  // 🚀 NEW: équipe sélectionnée & liste des équipes
-  const [selectedEquipe, setSelectedEquipe] = useState("");
-  const [equipes, setEquipes] = useState([]);
-
+  const [selectedTeam, setSelectedTeam] = useState(""); // ✅ nouvel état pour le sélecteur d'équipe
   const { rapport, setRapport } = useRapport();
   const [loading, setLoading] = useState(true);
   const [showHistorique, setShowHistorique] = useState(false);
@@ -73,23 +69,7 @@ function DashboardLayout() {
       setClubs(clubsMap);
       setJoueuses(joueusesData || []);
 
-      // 🔎 NEW: construire la liste d’équipes dispo (clubs + équipes vues dans matchs)
-      const setEquipesUnique = new Set(
-        [
-          ...(clubsData || []).map((c) => (c.nom || "").trim()).filter(Boolean),
-          ...(matchsData || []).flatMap((m) => [
-            (m.equipe_locale || "").trim(),
-            (m.equipe_visiteuse || "").trim(),
-          ]),
-        ]
-          .filter(Boolean)
-          .map((n) => n.trim())
-      );
-      setEquipes(
-        Array.from(setEquipesUnique).sort((a, b) => a.localeCompare(b))
-      );
-
-      // reset contexte
+      // reset du contexte "match" au chargement
       setEquipeLocale(null);
       setEquipeAdverse(null);
       setNomMatch(null);
@@ -100,7 +80,7 @@ function DashboardLayout() {
 
     fetchAll();
 
-    // ✅ rafraîchit après import
+    // ✅ écoute temps réel pour rafraîchir après import
     const sub = supabase
       .channel("rt-matchs")
       .on(
@@ -121,33 +101,106 @@ function DashboardLayout() {
     setIsTousLesMatchs,
   ]);
 
-  // 🚀 NEW: quand on change d’équipe, si le match sélectionné n’implique pas cette équipe, on reset
-  useEffect(() => {
-    if (!selectedEquipe || !matchId) return;
-    const m = matchs.find((x) => x.id === matchId);
-    if (!m) return;
-    const ok =
-      (m.equipe_locale || "").toLowerCase() === selectedEquipe.toLowerCase() ||
-      (m.equipe_visiteuse || "").toLowerCase() === selectedEquipe.toLowerCase();
-    if (!ok) {
-      // reset sélection de match & contexte
-      setMatchIdLocal(null);
-      setEquipeLocale(null);
-      setEquipeAdverse(null);
-      setNomMatch(null);
-      setIdMatch(null);
-      setIsTousLesMatchs(true);
-    }
-  }, [
-    selectedEquipe,
-    matchId,
-    matchs,
-    setEquipeLocale,
-    setEquipeAdverse,
-    setNomMatch,
-    setIdMatch,
-    setIsTousLesMatchs,
-  ]);
+  // ✅ événements filtrés par match sélectionné (inchangé)
+  const filteredEvents = matchId
+    ? evenements.filter((e) => e.id_match === matchId)
+    : evenements;
+
+  // ✅ matches filtrés à l’affichage selon l’équipe sélectionnée
+  const teamLower = (selectedTeam || "").toLowerCase();
+  const matchOptions = selectedTeam
+    ? matchs.filter(
+        (m) =>
+          (m.equipe_locale || "").toLowerCase().includes(teamLower) ||
+          (m.equipe_visiteuse || "").toLowerCase().includes(teamLower)
+      )
+    : matchs;
+
+  // ✅ liste d'équipes pour le sélecteur (depuis la table clubs si possible, sinon à partir des matchs)
+  const teamOptionsSet = new Set(
+    Object.values(clubs)
+      .map((c) => c?.nom)
+      .filter(Boolean)
+  );
+  if (teamOptionsSet.size === 0) {
+    // fallback si pas de clubs en base : dérive depuis les matchs
+    matchs.forEach((m) => {
+      if (m?.equipe_locale) teamOptionsSet.add(m.equipe_locale);
+      if (m?.equipe_visiteuse) teamOptionsSet.add(m.equipe_visiteuse);
+    });
+  }
+  const teamOptions = Array.from(teamOptionsSet).sort((a, b) =>
+    String(a).localeCompare(String(b), "fr")
+  );
+
+  // ✅ match actuellement sélectionné
+  const selectedMatch = matchs.find((m) => m.id === matchId);
+
+  // ✅ logos/infos clubs
+  const clubLocal =
+    (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
+    (selectedMatch
+      ? { nom: selectedMatch.equipe_locale, logo: "/placeholder.png" }
+      : null);
+  const clubVisiteur =
+    (selectedMatch && clubs[selectedMatch.club_visiteuse_id]) ||
+    (selectedMatch
+      ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.png" }
+      : null);
+
+  // ✅ scores (inchangé)
+  const getScore = (club, isLocale) => {
+    if (!club) return 0;
+    return filteredEvents.filter((e) => {
+      if (isLocale) {
+        return (
+          e.resultat_cthb?.toLowerCase().startsWith("but") &&
+          !e.resultat_cthb?.toLowerCase().includes("encaiss")
+        );
+      } else {
+        return (
+          e.resultat_limoges?.toLowerCase().startsWith("but") &&
+          !e.resultat_limoges?.toLowerCase().includes("encaiss")
+        );
+      }
+    }).length;
+  };
+
+  const scoreLocal = getScore(clubLocal, true);
+  const scoreVisiteur = getScore(clubVisiteur, false);
+
+  // ✅ filtre joueuses pour le rapport individuel : uniquement USDK
+  const isIndividuel = rapport === "individuel";
+  const joueusesFiltered = matchId
+    ? joueuses.filter((j) => {
+        if (!isIndividuel) {
+          return (
+            j.equipe === selectedMatch?.equipe_locale ||
+            j.equipe === selectedMatch?.equipe_visiteuse
+          );
+        }
+        return (j.equipe || "").toLowerCase() === "usdk";
+      })
+    : joueuses.filter((j) =>
+        !isIndividuel ? true : (j.equipe || "").toLowerCase() === "usdk"
+      );
+
+  const selectedJoueuse = joueuses.find(
+    (j) => String(j.id) === String(joueuseId)
+  );
+
+  // ✅ handlers (déclarés avant tout return)
+  const handleTeamChange = (e) => {
+    const val = e.target.value;
+    setSelectedTeam(val);
+    // on réinitialise le match sélectionné pour éviter un mismatch
+    setMatchIdLocal(null);
+    setEquipeLocale(null);
+    setEquipeAdverse(null);
+    setNomMatch(null);
+    setIdMatch(null);
+    setIsTousLesMatchs(true);
+  };
 
   const handleMatchChange = (e) => {
     const selectedId = e.target.value === "all" ? null : e.target.value;
@@ -171,54 +224,7 @@ function DashboardLayout() {
     }
   };
 
-  // 🚀 NEW: matches filtrés selon l’équipe sélectionnée
-  const matchsAffiches = useMemo(() => {
-    if (!selectedEquipe) return matchs;
-    const sel = selectedEquipe.toLowerCase();
-    return matchs.filter(
-      (m) =>
-        (m.equipe_locale || "").toLowerCase() === sel ||
-        (m.equipe_visiteuse || "").toLowerCase() === sel
-    );
-  }, [matchs, selectedEquipe]);
-
-  const filteredEvents = matchId
-    ? evenements.filter((e) => e.id_match === matchId)
-    : evenements;
-
-  const selectedMatch = matchs.find((m) => m.id === matchId);
-
-  const clubLocal =
-    (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
-    (selectedMatch
-      ? { nom: selectedMatch.equipe_locale, logo: "/placeholder.png" }
-      : null);
-  const clubVisiteur =
-    (selectedMatch && clubs[selectedMatch.club_visiteuse_id]) ||
-    (selectedMatch
-      ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.png" }
-      : null);
-
-  const getScore = (club, isLocale) => {
-    if (!club) return 0;
-    return filteredEvents.filter((e) => {
-      if (isLocale) {
-        return (
-          e.resultat_cthb?.toLowerCase().startsWith("but") &&
-          !e.resultat_cthb?.toLowerCase().includes("encaiss")
-        );
-      } else {
-        return (
-          e.resultat_limoges?.toLowerCase().startsWith("but") &&
-          !e.resultat_limoges?.toLowerCase().includes("encaiss")
-        );
-      }
-    }).length;
-  };
-
-  const scoreLocal = getScore(clubLocal, true);
-  const scoreVisiteur = getScore(clubVisiteur, false);
-
+  // ✅ return de loading APRÈS la déclaration de tous les hooks et dérivés
   if (loading) {
     return (
       <p className="text-center mt-10 text-gray-500">
@@ -227,51 +233,35 @@ function DashboardLayout() {
     );
   }
 
-  // ✅ joueuses pour le rapport individuel : uniquement USDK
-  const isIndividuel = rapport === "individuel";
-
-  const joueusesFiltered = matchId
-    ? joueuses.filter((j) => {
-        if (!isIndividuel) {
-          return (
-            j.equipe === selectedMatch?.equipe_locale ||
-            j.equipe === selectedMatch?.equipe_visiteuse
-          );
-        }
-
-        return (j.equipe || "").toLowerCase() === "usdk";
-      })
-    : joueuses.filter((j) =>
-        !isIndividuel ? true : (j.equipe || "").toLowerCase() === "usdk"
-      );
-
-  const selectedJoueuse = joueuses.find(
-    (j) => String(j.id) === String(joueuseId)
-  );
-
   return (
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
-      {/* 🚀 NEW: double sélecteur (Équipe à gauche, Match à droite) */}
-      <div className="flex justify-center items-center gap-3 mb-4">
+      {/* Sélecteurs en en-tête */}
+      <div className="flex justify-center mb-4 gap-3">
+        {/* ✅ Sélecteur d'équipe (NOUVEAU) */}
         <select
-          value={selectedEquipe}
-          onChange={(e) => setSelectedEquipe(e.target.value)}
+          value={selectedTeam}
+          onChange={handleTeamChange}
           className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Toutes les équipes</option>
-          {equipes.map((nom) => (
+          {teamOptions.map((nom) => (
             <option key={nom} value={nom}>
               {nom}
             </option>
           ))}
         </select>
 
+        {/* Sélecteur de match (filtré par l’équipe choisie) */}
         <select
           onChange={handleMatchChange}
           className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="all">Tous les matchs</option>
-          {matchsAffiches.map((match) => (
+          <option value="all">
+            {selectedTeam
+              ? "Tous les matchs (toutes équipes)"
+              : "Tous les matchs"}
+          </option>
+          {matchOptions.map((match) => (
             <option key={match.id} value={match.id}>
               {match.nom_match}
             </option>
@@ -606,8 +596,7 @@ function DashboardLayout() {
 
           {rapport === "gardien" && (
             <div className="text-center mt-20 text-gray-600 font-medium">
-              Rapport gardien en cours....{" "}
-              {/* 🔧 TODO: tes composants gardien */}
+              Rapport gardien en cours....
             </div>
           )}
         </>
