@@ -272,17 +272,17 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
         </h3>
 
         <div className="grid grid-cols-3 gap-6 mb-6">
-          <Card title="Pertes de balle adverses">
+          <Card title="Pertes de balle">
             <div className="text-2xl font-bold">
               {kpi?.defensif.pertesBalleAdv || 0}
             </div>
           </Card>
-          <Card title="Actions Positives (déf)">
+          <Card title="Actions Positives">
             <div className="text-2xl font-bold">
               {kpi?.defensif.actionsPos || 0}
             </div>
           </Card>
-          <Card title="Actions Négatives (déf)">
+          <Card title="Actions Négatives">
             <div className="text-2xl font-bold">
               {kpi?.defensif.actionsNeg || 0}
             </div>
