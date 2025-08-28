@@ -47,7 +47,7 @@ export default function EventTypePieChart({ data }) {
   const { equipeAdverse, isTousLesMatchs } = useMatch();
 
   const charts = useMemo(() => {
-    if (rapport !== "defensif") return null;
+    if (rapport !== "defensif" && rapport !== "gardien") return null;
 
     let goals = 0;
     let saves = 0;
