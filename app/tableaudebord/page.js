@@ -12,10 +12,30 @@ import TerrainHandBall from "@/components/dashboard/TerrainHandball";
 import GaugesPanel from "@/components/dashboard/GaugesPanel";
 import ImpactGrid from "@/components/dashboard/ImpactGrid";
 import EnclenchementsTable from "@/components/dashboard/EnclenchementsTable";
+import PlayerReportsPanel from "@/components/dashboard/PlayerReportsPanel";
 
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
 import { MatchProvider, useMatch } from "@/contexts/MatchContext";
+
+// Convertit un lien Drive (view ou ?id=) en lien direct /uc?id=...
+function driveToDirect(url) {
+  if (!url) return url;
+  try {
+    const s = String(url);
+    // Cas: https://drive.google.com/file/d/<ID>/view?usp=...
+    const m1 = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m1 && m1[1]) return `https://drive.google.com/uc?id=${m1[1]}`;
+
+    // Cas: https://drive.google.com/uc?id=<ID> ou ...?id=<ID>
+    const m2 = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m2 && m2[1]) return `https://drive.google.com/uc?id=${m2[1]}`;
+
+    return s;
+  } catch {
+    return url;
+  }
+}
 
 function DashboardLayout() {
   const [evenements, setEvenements] = useState([]);
@@ -23,11 +43,13 @@ function DashboardLayout() {
   const [clubs, setClubs] = useState({});
   const [joueuses, setJoueuses] = useState([]);
   const [joueuseId, setJoueuseId] = useState(null);
+  const [gardienId, setGardienId] = useState(null); // ✅ nouvel état gardien
   const [matchId, setMatchIdLocal] = useState(null);
-  const [selectedTeam, setSelectedTeam] = useState(""); // ✅ nouvel état pour le sélecteur d'équipe
+  const [selectedTeam, setSelectedTeam] = useState(""); // ✅ sélecteur d'équipe
   const { rapport, setRapport } = useRapport();
   const [loading, setLoading] = useState(true);
   const [showHistorique, setShowHistorique] = useState(false);
+  const [jeLinks, setJeLinks] = useState([]);
 
   const {
     setEquipeLocale,
@@ -55,9 +77,16 @@ function DashboardLayout() {
         .from("clubs")
         .select("id, nom, logo");
 
+      // ✅ on récupère aussi le poste
       const { data: joueusesData } = await supabase
         .from("joueuses")
-        .select("id, nom, photo_url, equipe");
+        .select("id, nom, photo_url, equipe, poste");
+
+      const { data: jeData } = await supabase
+        .from("joueuses_evenements")
+        .select("id, id_evenement, id_joueuse, nom_joueuse")
+        .range(0, 20000);
+      setJeLinks(jeData || []);
 
       const clubsMap = {};
       (clubsData || []).forEach((club) => {
@@ -101,12 +130,12 @@ function DashboardLayout() {
     setIsTousLesMatchs,
   ]);
 
-  // ✅ événements filtrés par match sélectionné (inchangé)
+  // ✅ événements filtrés par match sélectionné
   const filteredEvents = matchId
     ? evenements.filter((e) => e.id_match === matchId)
     : evenements;
 
-  // ✅ matches filtrés à l’affichage selon l’équipe sélectionnée
+  // ✅ matches filtrés par équipe sélectionnée
   const teamLower = (selectedTeam || "").toLowerCase();
   const matchOptions = selectedTeam
     ? matchs.filter(
@@ -116,14 +145,13 @@ function DashboardLayout() {
       )
     : matchs;
 
-  // ✅ liste d'équipes pour le sélecteur (depuis la table clubs si possible, sinon à partir des matchs)
+  // ✅ liste d'équipes pour le sélecteur (clubs -> fallback matchs)
   const teamOptionsSet = new Set(
     Object.values(clubs)
       .map((c) => c?.nom)
       .filter(Boolean)
   );
   if (teamOptionsSet.size === 0) {
-    // fallback si pas de clubs en base : dérive depuis les matchs
     matchs.forEach((m) => {
       if (m?.equipe_locale) teamOptionsSet.add(m.equipe_locale);
       if (m?.equipe_visiteuse) teamOptionsSet.add(m.equipe_visiteuse);
@@ -140,15 +168,15 @@ function DashboardLayout() {
   const clubLocal =
     (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
     (selectedMatch
-      ? { nom: selectedMatch.equipe_locale, logo: "/placeholder.png" }
+      ? { nom: selectedMatch.equipe_locale, logo: "/placeholder.jpg" }
       : null);
   const clubVisiteur =
     (selectedMatch && clubs[selectedMatch.club_visiteuse_id]) ||
     (selectedMatch
-      ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.png" }
+      ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.jpg" }
       : null);
 
-  // ✅ scores (inchangé)
+  // ✅ scores simples
   const getScore = (club, isLocale) => {
     if (!club) return 0;
     return filteredEvents.filter((e) => {
@@ -169,7 +197,7 @@ function DashboardLayout() {
   const scoreLocal = getScore(clubLocal, true);
   const scoreVisiteur = getScore(clubVisiteur, false);
 
-  // ✅ filtre joueuses pour le rapport individuel : uniquement USDK
+  // ✅ rapport individuel = uniquement joueurs USDK non GB
   const isIndividuel = rapport === "individuel";
   const joueusesFiltered = matchId
     ? joueuses.filter((j) => {
@@ -179,21 +207,39 @@ function DashboardLayout() {
             j.equipe === selectedMatch?.equipe_visiteuse
           );
         }
-        return (j.equipe || "").toLowerCase() === "usdk";
+        return (
+          (j.equipe || "").toLowerCase() === "usdk" &&
+          (j.poste || "").toUpperCase() !== "GB"
+        );
       })
     : joueuses.filter((j) =>
-        !isIndividuel ? true : (j.equipe || "").toLowerCase() === "usdk"
+        !isIndividuel
+          ? true
+          : (j.equipe || "").toLowerCase() === "usdk" &&
+            (j.poste || "").toUpperCase() !== "GB"
       );
+
+  // ✅ rapport gardien = uniquement GB (si match: restreint aux 2 équipes du match)
+  const gardiensFiltered = matchId
+    ? joueuses.filter((j) => {
+        const inTeams =
+          j.equipe === selectedMatch?.equipe_locale ||
+          j.equipe === selectedMatch?.equipe_visiteuse;
+        return inTeams && (j.poste || "").toUpperCase() === "GB";
+      })
+    : joueuses.filter((j) => (j.poste || "").toUpperCase() === "GB");
 
   const selectedJoueuse = joueuses.find(
     (j) => String(j.id) === String(joueuseId)
   );
+  const selectedGardien = joueuses.find(
+    (j) => String(j.id) === String(gardienId)
+  );
 
-  // ✅ handlers (déclarés avant tout return)
+  // ✅ handlers
   const handleTeamChange = (e) => {
     const val = e.target.value;
     setSelectedTeam(val);
-    // on réinitialise le match sélectionné pour éviter un mismatch
     setMatchIdLocal(null);
     setEquipeLocale(null);
     setEquipeAdverse(null);
@@ -224,7 +270,6 @@ function DashboardLayout() {
     }
   };
 
-  // ✅ return de loading APRÈS la déclaration de tous les hooks et dérivés
   if (loading) {
     return (
       <p className="text-center mt-10 text-gray-500">
@@ -237,7 +282,7 @@ function DashboardLayout() {
     <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
       {/* Sélecteurs en en-tête */}
       <div className="flex justify-center mb-4 gap-3">
-        {/* ✅ Sélecteur d'équipe (NOUVEAU) */}
+        {/* Équipe */}
         <select
           value={selectedTeam}
           onChange={handleTeamChange}
@@ -251,7 +296,7 @@ function DashboardLayout() {
           ))}
         </select>
 
-        {/* Sélecteur de match (filtré par l’équipe choisie) */}
+        {/* Match (filtré) */}
         <select
           onChange={handleMatchChange}
           className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -277,7 +322,7 @@ function DashboardLayout() {
           <div className="flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1]">
             <div className="flex items-center gap-3">
               <Image
-                src={clubLocal.logo}
+                src={clubLocal.logo || "/placeholder.jpg"}
                 alt={clubLocal.nom}
                 width={50}
                 height={50}
@@ -302,7 +347,7 @@ function DashboardLayout() {
                 </p>
               </div>
               <Image
-                src={clubVisiteur.logo}
+                src={clubVisiteur.logo || "/placeholder.jpg"}
                 alt={clubVisiteur.nom}
                 width={50}
                 height={50}
@@ -559,6 +604,7 @@ function DashboardLayout() {
             </>
           )}
 
+          {/* ===== Rapport individuel ===== */}
           {!showHistorique && rapport === "individuel" && (
             <>
               <div className="flex justify-center mb-4">
@@ -577,27 +623,79 @@ function DashboardLayout() {
               </div>
 
               {selectedJoueuse && (
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-6">
                   <Image
-                    src={selectedJoueuse.photo_url || "/placeholder.jpg"}
+                    src={
+                      driveToDirect(selectedJoueuse.photo_url) ||
+                      "/placeholder.jpg"
+                    }
                     alt={selectedJoueuse.nom}
                     width={160}
                     height={160}
-                    className="rounded-full shadow border"
+                    className="rounded-full shadow border object-cover"
+                    onError={(e) => {
+                      // fallback Next/Image — ignorable si /public/placeholder.jpg existe
+                    }}
+                  />
+                  <PlayerReportsPanel
+                    events={filteredEvents}
+                    jeLinks={jeLinks}
+                    match={selectedMatch}
+                    joueur={selectedJoueuse}
                   />
                 </div>
               )}
-
-              <div className="text-center mt-12 text-gray-600 font-medium">
-                Composants stats pour chaque joueur en cours...
-              </div>
             </>
           )}
 
+          {/* ===== Rapport gardien ===== */}
           {rapport === "gardien" && (
-            <div className="text-center mt-20 text-gray-600 font-medium">
-              Rapport gardien en cours....
-            </div>
+            <>
+              <div className="flex justify-center mb-4">
+                <select
+                  onChange={(e) => setGardienId(e.target.value || null)}
+                  value={gardienId || ""}
+                  className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sélectionner un gardien</option>
+                  {gardiensFiltered.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.nom} {g.equipe ? `(${g.equipe})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedGardien && (
+                <div className="flex flex-col items-center gap-6">
+                  <Image
+                    src={
+                      driveToDirect(selectedGardien.photo_url) ||
+                      "/placeholder.jpg"
+                    }
+                    alt={selectedGardien.nom}
+                    width={160}
+                    height={160}
+                    className="rounded-full shadow border object-cover"
+                    onError={() => {}}
+                  />
+                  <div className="w-full max-w-3xl">
+                    <EventTypePieChart
+                      data={
+                        filteredEvents.filter((ev) => {
+                          const nomGB = (selectedGardien?.nom || "").trim();
+                          if (!nomGB) return false;
+                          return (
+                            (ev.gb_cthb || "").trim() === nomGB ||
+                            (ev.gb_adv || "").trim() === nomGB
+                          );
+                        }) || []
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
