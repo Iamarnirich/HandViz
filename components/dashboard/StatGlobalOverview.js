@@ -15,81 +15,124 @@ import {
 import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
-function getColor(title, value, rapport) {
-  if (value === undefined || value === "—") return "bg-white text-[#1a1a1a]";
-  const num = parseFloat(value);
+const OBJECTIFS = {
+  offensif: {
+    Possessions: "55",
+    "Buts marqués": "32",
+    "Pertes de balle": "<10",
+    "Tirs ratés": "12-13",
+    "Tirs total": "55",
+    Neutralisations: "<17",
+    "2 Min obtenues": "3",
+    "7 m obtenus": "5",
+    "Indice de continuité": null,
+  },
+  defensif: {
+    Possessions: "54",
+    "Buts encaissés": "29",
+    "Arrêts de GB": "13",
+    "Tirs Hors-Cadre": null,
+    "Balles récupérées": "11",
+    "Total tirs reçus": "50",
+    "Neutralisations réalisées": "21",
+    "2 min subies": "2",
+    "7m subis": "3",
+    "Indice d'agressivité": null,
+  },
+};
 
-  if (rapport === "offensif") {
-    switch (title) {
-      case "Possessions":
-        return num >= 55
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Buts marqués":
-        return num >= 32
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Pertes de balle":
-        return num <= 1
-          ? "bg-[#B6D8F2] text-black"
-          : num < 10
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Tirs ratés":
-        return num > 13 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
-      case "Tirs total":
-        return num < 55 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
-      case "Neutralisations":
-        return num > 17 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
-      case "2 Min obtenues":
-        return num > 3
-          ? "bg-[#B6D8F2] text-black"
-          : num < 3
-          ? "bg-[#FFBFB0] text-black"
-          : "bg-[#9FCDA8] text-black";
-      case "7 m obtenus":
-        return num > 5.5
-          ? "bg-[#FFBFB0] text-black"
-          : "bg-[#B6D8F2] text-black";
-      default:
-        return "bg-white text-[#1a1a1a]";
-    }
+// opérateur par défaut si un objectif est un simple nombre
+const DEFAULT_OP = {
+  offensif: ">=",
+  defensif: ">=",
+};
+
+// ✅ Corrigé : le texte retourné est SANS signe (on garde les opérateurs pour la comparaison)
+function parseTarget(expr, rapport) {
+  if (!expr) return { kind: "none" };
+  const s = String(expr).replace(/\s+/g, "").toLowerCase();
+
+  // plage a-b
+  const mRange = s.match(/^(\d+(?:\.\d+)?)\-(\d+(?:\.\d+)?)$/);
+  if (mRange) {
+    return {
+      kind: "range",
+      min: Number(mRange[1]),
+      max: Number(mRange[2]),
+      text: `${mRange[1]}–${mRange[2]}`, // affichage sans signe
+    };
   }
 
-  if (rapport === "defensif") {
-    switch (title) {
-      case "Possessions":
-        return num >= 54
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Buts encaissés":
-        return num <= 29
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Arrêts de GB":
-        return num >= 13
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Balles récupérées":
-        return num >= 11
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Total tirs reçus":
-        return num <= 50
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "Neutralisations réalisées":
-        return num >= 21
-          ? "bg-[#9FCDA8] text-black"
-          : "bg-[#FFBFB0] text-black";
-      case "2 min subies":
-        return num > 2 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
-      case "7m subis":
-        return num > 3 ? "bg-[#FFBFB0] text-black" : "bg-[#9FCDA8] text-black";
-      default:
-        return "bg-white text-[#1a1a1a]";
-    }
+  // <=x ou <x
+  const mLe = s.match(/^(<=|<)(\d+(?:\.\d+)?)$/);
+  if (mLe) return { kind: "lte", value: Number(mLe[2]), text: expr };
+
+  // >=x ou >x
+  const mGe = s.match(/^(>=|>)(\d+(?:\.\d+)?)$/);
+  if (mGe) return { kind: "gte", value: Number(mGe[2]), text: expr };
+
+  // nombre nu → applique opérateur par défaut (texte reste nu)
+  const mNum = s.match(/^(\d+(?:\.\d+)?)$/);
+  if (mNum) {
+    const op = DEFAULT_OP[rapport] || ">=";
+    const v = Number(mNum[1]);
+    return op === ">="
+      ? { kind: "gte", value: v, text: mNum[1] }
+      : { kind: "lte", value: v, text: mNum[1] };
   }
+
+  return { kind: "none" };
+}
+
+function checkObjective(label, rapport, value) {
+  const table = OBJECTIFS[rapport] || {};
+  const expr = table[label];
+  const target = parseTarget(expr, rapport);
+
+  if (target.kind === "none" || value == null || isNaN(value)) {
+    return { status: "na", targetText: null };
+  }
+
+  switch (target.kind) {
+    case "range":
+      return {
+        status: value >= target.min && value <= target.max ? "ok" : "bad",
+        targetText: target.text,
+      };
+    case "lte":
+      return {
+        status: value <= target.value ? "ok" : "bad",
+        targetText: target.text,
+      };
+    case "gte":
+      return {
+        status: value >= target.value ? "ok" : "bad",
+        targetText: target.text,
+      };
+    default:
+      return { status: "na", targetText: null };
+  }
+}
+
+function ObjectiveBadge({ status, targetText }) {
+  if (status === "na" || !targetText) return null;
+  const color =
+    status === "ok"
+      ? "bg-green-100 text-green-800 border-green-200"
+      : "bg-red-100 text-red-800 border-red-200";
+  return (
+    <span
+      className={`ml-2 inline-flex items-center px-2 py-[2px] rounded-full text-[11px] border ${color}`}
+      title="Objectif"
+    >
+      {targetText}
+    </span>
+  );
+}
+
+function getCardClassesByObjective(status) {
+  if (status === "ok") return "bg-[#9FCDA8] text-black";
+  if (status === "bad") return "bg-[#FFBFB0] text-black";
   return "bg-white text-[#1a1a1a]";
 }
 
@@ -117,7 +160,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
 
     const norm = (s) => (s || "").toLowerCase().trim();
 
-    // Possession "Possession Equipe_Adverse_"
     const parsePossession = (txt) => {
       const s = norm(txt);
       const m = s.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
@@ -133,7 +175,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
       jt: 0,
     });
 
-    // Déduit "notre" équipe si non fournie
     const inferTeam = () => {
       const counts = {};
       const bump = (name) => {
@@ -177,10 +218,8 @@ export default function StatGlobalOverview({ data, matchCount }) {
     const team = norm(equipeLocale) || inferTeam();
     const oppHint = norm(equipeAdverse);
 
-    // Tous les enregistrements "possession"
     const possRows = data.filter((r) => !!parsePossession(r.possession));
 
-    // Matchs où la team est impliquée (dans la colonne possession)
     const matchIdsWithTeam = new Set(
       possRows
         .filter((r) => {
@@ -193,16 +232,14 @@ export default function StatGlobalOverview({ data, matchCount }) {
         .filter(Boolean)
     );
 
-    // Dénominateur correct pour la moyenne (tous les matchs de la team)
     const gamesTeam = Math.max(1, matchIdsWithTeam.size);
 
-    // Helper moyenne récursive (pour les AUTRES cartes). On évite "possessions".
     const divideStats = (obj) => {
       if (!isTousLesMatchs || gamesTeam < 2) return obj;
       const out = {};
       for (const k in obj) {
         if (k === "possessions") {
-          out[k] = obj[k]; // possessions déjà converties en moyenne manuellement
+          out[k] = obj[k];
           continue;
         }
         const v = obj[k];
@@ -222,7 +259,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
       typeof nom === "string" &&
       str.toLowerCase().includes(nom.toLowerCase());
 
-    // ===================== DÉFENSIF =====================
+    // ====== DEFENSIF ======
     if (rapport === "defensif") {
       const result = {
         possessions: initPhaseStats(),
@@ -240,33 +277,21 @@ export default function StatGlobalOverview({ data, matchCount }) {
       let butsAP = 0;
       let neutralAP = 0;
 
-      // total des possessions dans les matchs de la team
       const totalPossInTeamMatches = possRows.filter((r) =>
         matchIdsWithTeam.has(r.id_match)
       ).length;
-      // possessions de la team (OFF) dans ces mêmes matchs
       const offPossCount = possRows.filter((r) => {
         const p = parsePossession(r.possession);
         return p && p.equipe === team && matchIdsWithTeam.has(r.id_match);
       }).length;
-      // possessions adverses = total - off
       const defPossCount = Math.max(0, totalPossInTeamMatches - offPossCount);
-      // moyenne par match
       result.possessions.total = Number((defPossCount / gamesTeam).toFixed(1));
 
-      // Sous‑phases AP/ER/CA/MB/JT dépendantes de la possession adverse
       const defPossRows = possRows.filter((r) => {
         const p = parsePossession(r.possession);
         return p && p.equipe !== team && matchIdsWithTeam.has(r.id_match);
       });
-      const countStarts = (prefix, eq) =>
-        defPossRows.reduce((acc, r) => {
-          const a = norm(r.nom_action);
-          return acc + (a.startsWith(prefix + " " + eq) ? 1 : 0);
-        }, 0);
 
-      // On n’a pas un seul "eq" ici (plusieurs adversaires possibles). On compte par ligne.
-      // Pour être robuste, on teste contre p.equipe (adverse ligne par ligne)
       let ap = 0,
         ca = 0,
         er = 0,
@@ -282,7 +307,6 @@ export default function StatGlobalOverview({ data, matchCount }) {
         if (a.startsWith("mb " + p.equipe)) mb++;
         if (a.startsWith("transition " + p.equipe)) jt++;
       }
-      // moyenne par match
       result.possessions.ap = Number((ap / gamesTeam).toFixed(1));
       result.possessions.ca = Number((ca / gamesTeam).toFixed(1));
       result.possessions.er = Number((er / gamesTeam).toFixed(1));
@@ -386,7 +410,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
       return isTousLesMatchs ? divideStats(result) : result;
     }
 
-    // ===================== OFFENSIF =====================
+    // ====== OFFENSIF ======
     const resultOff = {
       tirsTotal: initPhaseStats(),
       tirsRates: initPhaseStats(),
@@ -436,7 +460,7 @@ export default function StatGlobalOverview({ data, matchCount }) {
       const sanction = norm(e.sanctions);
 
       const isLocal =
-        team && (filtreEquipe(action, team) || filtreEquipe(resultat, team));
+        team && (action.includes(team) || resultat.includes(team));
 
       const isAP = team ? action.startsWith("attaque " + team) : false;
       const phaseKeys = {
@@ -509,13 +533,11 @@ export default function StatGlobalOverview({ data, matchCount }) {
     resultOff.indiceContinuite.total =
       neutralAP > 0 ? Number((butsAP / neutralAP).toFixed(2)) : "—";
 
-    // moyenne sur tous les matchs pour les autres cartes
     return isTousLesMatchs ? divideStats(resultOff) : resultOff;
   }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs]);
 
   const formatSub = (stat, title) => {
     if (!stat || typeof stat.ap === "undefined") return null;
-
     if (title === "Possessions") return null;
 
     const skipSubStats =
@@ -692,21 +714,29 @@ export default function StatGlobalOverview({ data, matchCount }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-3 gap-4 px-4">
         {cards.map((card, idx) => {
           const Icon = card.icon;
-          const value = card.stat?.total;
-          const colorClass = getColor(card.title, value, rapport);
+          const rawValue = card.stat?.total;
+          const numericValue = typeof rawValue === "number" ? rawValue : NaN;
+
+          const { status, targetText } = checkObjective(
+            card.title,
+            rapport,
+            numericValue
+          );
+          const colorClass = getCardClassesByObjective(status);
+
           return (
             <div
               key={idx}
-              className={`border border-[#E4CDA1] rounded-xl shadow p-4 min-h-[130px] flex flex-col justify-between items-center hover:scale-[1.02] transition-transform ${getColor(
-                card.title,
-                value,
-                rapport
-              )}`}
+              className={`border border-[#E4CDA1] rounded-xl shadow p-4 min-h-[130px] flex flex-col justify-between items-center hover:scale-[1.02] transition-transform ${colorClass}`}
             >
               <div className="flex items-center gap-2">
                 <Icon className={`h-5 w-5 ${card.iconColor}`} />
-                <h4 className="text-s font-semibold">{card.title}</h4>
+                <h4 className="text-s font-semibold flex items-center">
+                  {card.title}
+                  <ObjectiveBadge status={status} targetText={targetText} />
+                </h4>
               </div>
+
               <div
                 className={`text-xl font-extrabold text-center ${
                   !formatSub(card.stat, card.title)
@@ -714,8 +744,9 @@ export default function StatGlobalOverview({ data, matchCount }) {
                     : ""
                 }`}
               >
-                {value ?? "—"}
+                {rawValue ?? "—"}
               </div>
+
               {formatSub(card.stat, card.title)}
             </div>
           );
