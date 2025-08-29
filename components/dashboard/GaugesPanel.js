@@ -25,12 +25,12 @@ const OBJECTIFS_GAUGES = {
     "% Réussite Duel Direct": "50",
   },
   defensif: {
-    "Efficacité déf. Globale": "<=48",
-    "Efficacité déf. Placée": "<=48",
-    "Efficacité déf. GE": "<=50",
-    "Eff. en Inf. Numérique": "<=30",
-    "% Tirs en Duel reçus": "<=50",
-    "% Réussite Duel Adv": "<=50",
+    "Efficacité déf. Globale": "48",
+    "Efficacité déf. Placée": "48",
+    "Efficacité déf. GE": "<50",
+    "Eff. en Inf. Numérique": "30",
+    "% Tirs en Duel reçus": "50",
+    "% Réussite Duel Adv": "50",
   },
 };
 
