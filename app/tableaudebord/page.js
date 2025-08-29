@@ -286,7 +286,7 @@ function DashboardLayout() {
         <select
           value={selectedTeam}
           onChange={handleTeamChange}
-          className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Toutes les équipes</option>
           {teamOptions.map((nom) => (
@@ -299,7 +299,7 @@ function DashboardLayout() {
         {/* Match (filtré) */}
         <select
           onChange={handleMatchChange}
-          className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="all">
             {selectedTeam
@@ -611,7 +611,7 @@ function DashboardLayout() {
                 <select
                   onChange={(e) => setJoueuseId(e.target.value || null)}
                   value={joueuseId || ""}
-                  className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Sélectionner un joueur</option>
                   {joueusesFiltered.map((joueuse) => (
@@ -655,7 +655,7 @@ function DashboardLayout() {
                 <select
                   onChange={(e) => setGardienId(e.target.value || null)}
                   value={gardienId || ""}
-                  className="border border-gray-300 rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Sélectionner un gardien</option>
                   {gardiensFiltered.map((g) => (

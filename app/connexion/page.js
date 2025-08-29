@@ -73,7 +73,7 @@ export default function ConnexionPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 flex items-center justify-center px-4">
-      <div className="w-full max-w-md p-6 bg-white shadow-md rounded-2xl">
+      <div className="w-full text-black max-w-md p-6 bg-white shadow-md rounded-2xl">
         <h1 className="text-2xl font-bold mb-6 text-center">
           {isLogin ? "Connexion" : "Inscription"}
         </h1>
