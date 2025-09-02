@@ -254,39 +254,82 @@ function DashboardLayout() {
     (j) => String(j.id) === String(gardienId)
   );
 
-  // ✅ handlers
-  const handleTeamChange = (e) => {
-    const val = e.target.value;
-    setSelectedTeam(val);
-    setMatchIdLocal(null);
-    setEquipeLocale(null);
-    setEquipeAdverse(null);
-    setNomMatch(null);
-    setIdMatch(null);
-    setIsTousLesMatchs(true);
-  };
+  // ✅ Quand on change d'équipe :
+// - on force l'équipe choisie comme "équipe locale" (référence offensive)
+// - on réinitialise la sélection de match
+// - on affiche l’agrégation multi-matchs de cette équipe
+// - on force le rapport sur "offensif"
+const handleTeamChange = (e) => {
+  const val = e.target.value;
+  setSelectedTeam(val);
 
-  const handleMatchChange = (e) => {
-    const selectedId = e.target.value === "all" ? null : e.target.value;
-    setMatchIdLocal(selectedId);
+  // Reset sélection match
+  setMatchIdLocal(null);
+  setIdMatch(null);
+  setNomMatch(null);
 
-    if (selectedId) {
-      const matchData = matchs.find((m) => m.id === selectedId);
-      if (matchData) {
+  // Contexte d'analyse
+  setEquipeLocale(val || null);   // équipe de référence = équipe sélectionnée
+  setEquipeAdverse(null);
+  setIsTousLesMatchs(true);
+
+  // Perspective souhaitée
+  setRapport("offensif");
+};
+
+// ✅ Quand on change de match :
+// - si une équipe est sélectionnée, on LA garde comme "locale"
+// - on déduit l’adversaire à partir du match sélectionné
+// - on force la perspective offensive
+const handleMatchChange = (e) => {
+  const selectedId = e.target.value === "all" ? null : e.target.value;
+  setMatchIdLocal(selectedId);
+
+  if (selectedId) {
+    const matchData = matchs.find((m) => m.id === selectedId);
+    if (matchData) {
+      if (selectedTeam) {
+        const teamLower = selectedTeam.toLowerCase().trim();
+        const homeLower = (matchData.equipe_locale || "").toLowerCase().trim();
+        const awayLower = (matchData.equipe_visiteuse || "").toLowerCase().trim();
+
+        const opponent =
+          homeLower === teamLower
+            ? matchData.equipe_visiteuse
+            : awayLower === teamLower
+            ? matchData.equipe_locale
+            : null;
+
+        // On garde l'équipe sélectionnée comme référence offensive
+        setEquipeLocale(selectedTeam);
+        setEquipeAdverse(opponent);
+      } else {
+        // Comportement par défaut si aucune équipe n'est sélectionnée
         setEquipeLocale(matchData.equipe_locale);
         setEquipeAdverse(matchData.equipe_visiteuse);
-        setNomMatch(matchData.nom_match);
-        setIdMatch(matchData.id);
-        setIsTousLesMatchs(false);
       }
-    } else {
-      setEquipeLocale(null);
-      setEquipeAdverse(null);
-      setNomMatch(null);
-      setIdMatch(null);
-      setIsTousLesMatchs(true);
+
+      setNomMatch(matchData.nom_match);
+      setIdMatch(matchData.id);
+      setIsTousLesMatchs(false);
+
+      // Toujours en offensif pour respecter ta demande
+      setRapport("offensif");
     }
-  };
+  } else {
+    // Retour à l’agrégation multi-matchs
+    setIdMatch(null);
+    setNomMatch(null);
+    setIsTousLesMatchs(true);
+
+    // On garde l’équipe sélectionnée (si présente) comme référence offensive
+    setEquipeLocale(selectedTeam || null);
+    setEquipeAdverse(null);
+
+    setRapport("offensif");
+  }
+};
+
 
   if (loading) {
     return (
@@ -316,6 +359,7 @@ function DashboardLayout() {
 
         {/* Match (filtré) */}
         <select
+          value={matchId ?? "all"}  
           onChange={handleMatchChange}
           className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
