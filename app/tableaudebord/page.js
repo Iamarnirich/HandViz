@@ -130,13 +130,10 @@ function DashboardLayout() {
     setIsTousLesMatchs,
   ]);
 
-  // ✅ événements filtrés par match sélectionné
-  const filteredEvents = matchId
-    ? evenements.filter((e) => e.id_match === matchId)
-    : evenements;
+  /* ========= CORRECTIONS ICI ========= */
 
-  // ✅ matches filtrés par équipe sélectionnée
-  const teamLower = (selectedTeam || "").toLowerCase();
+  // ✅ matches filtrés par équipe sélectionnée (pour le sélecteur "match")
+  const teamLower = (selectedTeam || "").toLowerCase().trim();
   const matchOptions = selectedTeam
     ? matchs.filter(
         (m) =>
@@ -144,6 +141,27 @@ function DashboardLayout() {
           (m.equipe_visiteuse || "").toLowerCase().includes(teamLower)
       )
     : matchs;
+
+  // ✅ IDs des matchs où l'équipe sélectionnée a participé
+  const teamMatchIds = new Set(
+    selectedTeam
+      ? matchOptions.map((m) => m.id)
+      : []
+  );
+
+  // ✅ événements réellement affichés : par match si choisi, sinon par équipe si choisie
+  const filteredEvents = matchId
+    ? evenements.filter((e) => e.id_match === matchId)
+    : selectedTeam
+    ? evenements.filter((e) => teamMatchIds.has(e.id_match))
+    : evenements;
+
+  // ✅ nombre de matchs correspondant au jeu de données affiché (pour les moyennes)
+  const matchCountFiltered = matchId
+    ? 1
+    : new Set(filteredEvents.map((e) => e.id_match)).size;
+
+  /* =================================== */
 
   // ✅ liste d'équipes pour le sélecteur (clubs -> fallback matchs)
   const teamOptionsSet = new Set(
@@ -176,7 +194,7 @@ function DashboardLayout() {
       ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.jpg" }
       : null);
 
-  // ✅ scores simples
+  // ✅ scores simples (calculés sur filteredEvents)
   const getScore = (club, isLocale) => {
     if (!club) return 0;
     return filteredEvents.filter((e) => {
@@ -303,7 +321,7 @@ function DashboardLayout() {
         >
           <option value="all">
             {selectedTeam
-              ? "Tous les matchs (toutes équipes)"
+              ? "Tous les matchs de l’équipe sélectionnée"
               : "Tous les matchs"}
           </option>
           {matchOptions.map((match) => (
@@ -400,11 +418,7 @@ function DashboardLayout() {
                 <div className="h-full flex flex-col gap-6">
                   <StatGlobalOverview
                     data={filteredEvents}
-                    matchCount={
-                      matchId
-                        ? 1
-                        : new Set(evenements.map((e) => e.id_match)).size
-                    }
+                    matchCount={matchCountFiltered}
                   />
                   <div className="w-full flex justify-center">
                     <TimelineChart data={filteredEvents} />
@@ -413,20 +427,12 @@ function DashboardLayout() {
                 <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
                   <ImpactGrid
                     data={filteredEvents}
-                    matchCount={
-                      matchId
-                        ? 1
-                        : new Set(evenements.map((e) => e.id_match)).size
-                    }
+                    matchCount={matchCountFiltered}
                   />
                   <div className="w-full max-w-3xl aspect-[3/3]">
                     <TerrainHandBall
                       data={filteredEvents}
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                   </div>
                 </div>
@@ -437,31 +443,19 @@ function DashboardLayout() {
                     <GaugesPanel
                       data={filteredEvents}
                       range="left"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-left"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                   </div>
                   <div className="flex flex-col items-center gap-8 w-full">
                     <div className="w-full max-w-4xl">
                       <UtilisationSecteursChart
                         data={filteredEvents}
-                        matchCount={
-                          matchId
-                            ? 1
-                            : new Set(evenements.map((e) => e.id_match)).size
-                        }
+                        matchCount={matchCountFiltered}
                       />
                     </div>
 
@@ -478,20 +472,12 @@ function DashboardLayout() {
                     <GaugesPanel
                       data={filteredEvents}
                       range="right"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-right"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                   </div>
                 </div>
@@ -505,11 +491,7 @@ function DashboardLayout() {
                 <div className="h-full flex flex-col gap-6">
                   <StatGlobalOverview
                     data={filteredEvents}
-                    matchCount={
-                      matchId
-                        ? 1
-                        : new Set(evenements.map((e) => e.id_match)).size
-                    }
+                    matchCount={matchCountFiltered}
                   />
                   <div className="w-full flex justify-center">
                     <TimelineChart data={filteredEvents} />
@@ -518,20 +500,12 @@ function DashboardLayout() {
                 <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
                   <ImpactGrid
                     data={filteredEvents}
-                    matchCount={
-                      matchId
-                        ? 1
-                        : new Set(evenements.map((e) => e.id_match)).size
-                    }
+                    matchCount={matchCountFiltered}
                   />
                   <div className="w-full max-w-3xl aspect-[3/3]">
                     <TerrainHandBall
                       data={filteredEvents}
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                   </div>
                 </div>
@@ -542,31 +516,19 @@ function DashboardLayout() {
                     <GaugesPanel
                       data={filteredEvents}
                       range="left"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-left"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                   </div>
                   <div className="flex flex-col items-center gap-8 w-full">
                     <div className="w-full max-w-4xl">
                       <UtilisationSecteursChart
                         data={filteredEvents}
-                        matchCount={
-                          matchId
-                            ? 1
-                            : new Set(evenements.map((e) => e.id_match)).size
-                        }
+                        matchCount={matchCountFiltered}
                       />
                     </div>
 
@@ -583,20 +545,12 @@ function DashboardLayout() {
                     <GaugesPanel
                       data={filteredEvents}
                       range="right"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-right"
-                      matchCount={
-                        matchId
-                          ? 1
-                          : new Set(evenements.map((e) => e.id_match)).size
-                      }
+                      matchCount={matchCountFiltered}
                     />
                   </div>
                 </div>
