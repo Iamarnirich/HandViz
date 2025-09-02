@@ -28,15 +28,16 @@ const OBJECTIFS = {
     "Indice de continuité": null,
   },
   defensif: {
-    Possessions: "54",
-    "Buts encaissés": "29",
-    "Arrêts de GB": "13",
+    // ✅ règles demandées (opérateurs internes, badge sans signe via parseTarget)
+    Possessions: "<=54",
+    "Buts encaissés": "<=29",
+    "Arrêts de GB": ">=13",
     "Tirs Hors-Cadre": null,
-    "Balles récupérées": "11",
-    "Total tirs reçus": "50",
-    "Neutralisations réalisées": "21",
-    "2 min subies": "2",
-    "7m subis": "3",
+    "Balles récupérées": ">=11",
+    "Total tirs reçus": "<=50",
+    "Neutralisations réalisées": ">=21",
+    "2 min subies": "<=2",
+    "7m subis": "<=3",
     "Indice d'agressivité": null,
   },
 };
@@ -44,10 +45,10 @@ const OBJECTIFS = {
 // opérateur par défaut si un objectif est un simple nombre
 const DEFAULT_OP = {
   offensif: ">=",
-  defensif: ">=",
+  defensif: ">=", // les signes sont fournis ci-dessus pour le défensif
 };
 
-// ✅ Corrigé : le texte retourné est SANS signe (on garde les opérateurs pour la comparaison)
+// ✅ Badge SANS signe (mais conserve la logique de comparaison)
 function parseTarget(expr, rapport) {
   if (!expr) return { kind: "none" };
   const s = String(expr).replace(/\s+/g, "").toLowerCase();
@@ -65,11 +66,11 @@ function parseTarget(expr, rapport) {
 
   // <=x ou <x
   const mLe = s.match(/^(<=|<)(\d+(?:\.\d+)?)$/);
-  if (mLe) return { kind: "lte", value: Number(mLe[2]), text: expr };
+  if (mLe) return { kind: "lte", value: Number(mLe[2]), text: mLe[2] };
 
   // >=x ou >x
   const mGe = s.match(/^(>=|>)(\d+(?:\.\d+)?)$/);
-  if (mGe) return { kind: "gte", value: Number(mGe[2]), text: expr };
+  if (mGe) return { kind: "gte", value: Number(mGe[2]), text: mGe[2] };
 
   // nombre nu → applique opérateur par défaut (texte reste nu)
   const mNum = s.match(/^(\d+(?:\.\d+)?)$/);
@@ -84,6 +85,13 @@ function parseTarget(expr, rapport) {
   return { kind: "none" };
 }
 
+// marge "largement" (10% du seuil, min 1 pour les petits nombres)
+function greatMargin(base) {
+  const m = Math.ceil(base * 0.1);
+  return Math.max(1, m);
+}
+
+// ➕ renvoie 'great' (BLEU) quand performance dépasse largement l’objectif
 function checkObjective(label, rapport, value) {
   const table = OBJECTIFS[rapport] || {};
   const expr = table[label];
@@ -93,36 +101,48 @@ function checkObjective(label, rapport, value) {
     return { status: "na", targetText: null };
   }
 
-  switch (target.kind) {
-    case "range":
-      return {
-        status: value >= target.min && value <= target.max ? "ok" : "bad",
-        targetText: target.text,
-      };
-    case "lte":
-      return {
-        status: value <= target.value ? "ok" : "bad",
-        targetText: target.text,
-      };
-    case "gte":
-      return {
-        status: value >= target.value ? "ok" : "bad",
-        targetText: target.text,
-      };
-    default:
-      return { status: "na", targetText: null };
+  if (target.kind === "range") {
+    const ok = value >= target.min && value <= target.max;
+    // pas de notion de "great" pour une plage
+    return { status: ok ? "ok" : "bad", targetText: target.text };
   }
+
+  if (target.kind === "gte") {
+    const margin = greatMargin(target.value);
+    if (value >= target.value + margin) {
+      return { status: "great", targetText: target.text };
+    }
+    if (value >= target.value) {
+      return { status: "ok", targetText: target.text };
+    }
+    return { status: "bad", targetText: target.text };
+  }
+
+  if (target.kind === "lte") {
+    const margin = greatMargin(target.value);
+    if (value <= target.value - margin) {
+      return { status: "great", targetText: target.text };
+    }
+    if (value <= target.value) {
+      return { status: "ok", targetText: target.text };
+    }
+    return { status: "bad", targetText: target.text };
+  }
+
+  return { status: "na", targetText: null };
 }
 
 function ObjectiveBadge({ status, targetText }) {
   if (status === "na" || !targetText) return null;
   const color =
-    status === "ok"
-      ? "bg-green-100 text-green-800 border-green-200"
-      : "bg-red-100 text-red-800 border-red-200";
+    status === "great"
+      ? "bg-[#B6D8F2] text-black border-[#B6D8F2]" // BLEU
+      : status === "ok"
+      ? "bg-[#9FCDA8] text-black border-[#9FCDA8]" // VERT
+      : "bg-[#FFBFB0] text-black border-[#FFBFB0]"; // ROUGE
   return (
     <span
-      className={`ml-2 inline-flex items-center px-2 py-[2px] rounded-full text-[11px] border ${color}`}
+      className={`ml-2 inline-flex items-center px-2 py-[2px] rounded-full text-[11px] font-medium border ${color} shadow-sm`}
       title="Objectif"
     >
       {targetText}
@@ -130,9 +150,11 @@ function ObjectiveBadge({ status, targetText }) {
   );
 }
 
+// mapping des couleurs de card
 function getCardClassesByObjective(status) {
-  if (status === "ok") return "bg-[#9FCDA8] text-black";
-  if (status === "bad") return "bg-[#FFBFB0] text-black";
+  if (status === "great") return "bg-[#B6D8F2] text-black"; // BLEU
+  if (status === "ok") return "bg-[#9FCDA8] text-black";    // VERT
+  if (status === "bad") return "bg-[#FFBFB0] text-black";   // ROUGE
   return "bg-white text-[#1a1a1a]";
 }
 
@@ -426,7 +448,8 @@ export default function StatGlobalOverview({ data, matchCount }) {
     let butsAP = 0;
     let neutralAP = 0;
 
-    const offPossRows = possRows.filter((r) => {
+    const possRows2 = possRows;
+    const offPossRows = possRows2.filter((r) => {
       const p = parsePossession(r.possession);
       return p && p.equipe === team && matchIdsWithTeam.has(r.id_match);
     });

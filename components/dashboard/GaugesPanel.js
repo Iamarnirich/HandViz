@@ -53,9 +53,55 @@ function formatObjectiveBadge(expr) {
   return raw;
 }
 
+/* ========= MODIF ICI : couleurs du rapport défensif selon tes règles ========= */
 function getGaugeColor(label, value, rapport) {
   if (value === undefined || value === null || isNaN(value)) return "#999";
 
+  // Normalise quelques variantes possibles de libellés
+  const L = (label || "").toLowerCase();
+
+  if (rapport === "defensif") {
+    // Règles demandées (vert si objectif respecté, rouge sinon)
+    // Possessions: max 54 → ≤54 vert, >54 rouge
+    if (L.includes("possessions")) {
+      return value <= 54 ? "#9FCDA8" : "#F44336";
+    }
+    // Buts encaissés: max 29
+    if (L.includes("buts") && (L.includes("encaiss") || L.includes("reçus"))) {
+      return value <= 29 ? "#9FCDA8" : "#F44336";
+    }
+    // Arrêts GB: objectif 13 min → ≥13 vert
+    if (L.includes("arr") && (L.includes("gb") || L.includes("gardien"))) {
+      return value >= 13 ? "#9FCDA8" : "#F44336";
+    }
+    // Tirs hors cadre: pas encore défini → neutre/or
+    if (L.includes("hors") && L.includes("cadre")) {
+      return "#D4AF37";
+    }
+    // Balles récupérées: objectif 11 min → ≥11 vert
+    if (L.includes("balles") && L.includes("récup")) {
+      return value >= 11 ? "#9FCDA8" : "#F44336";
+    }
+    // Tirs reçus (aussi "Total tirs reçus"): max 50 → ≤50 vert, >50 rouge
+    if (L.includes("tirs") && (L.includes("reçus") || L.includes("total"))) {
+      return value <= 50 ? "#9FCDA8" : "#F44336";
+    }
+    // Neutralisations: min 21 → ≥21 vert
+    if (L.includes("neutralis")) {
+      return value >= 21 ? "#9FCDA8" : "#F44336";
+    }
+    // 2 min subies: max 2 → ≤2 vert, >2 rouge
+    if (L.includes("2") && L.includes("min") && L.includes("sub")) {
+      return value <= 2 ? "#9FCDA8" : "#F44336";
+    }
+    // 7m subis: max 3 → ≤3 vert, >3 rouge
+    if ((L.includes("7m") || L.includes("7 m")) && L.includes("sub")) {
+      return value <= 3 ? "#9FCDA8" : "#F44336";
+    }
+    // Si on ne matche aucun de ces intitulés, on retombe sur l’ancienne logique des % d’efficacité
+  }
+
+  // Ancienne logique (inchangée) pour offensif + fallback défensif (efficacités %)
   const seuils = {
     offensif: {
       "Eff. Globale": 55,
@@ -99,6 +145,7 @@ function getGaugeColor(label, value, rapport) {
     return "#F44336";
   }
 }
+/* ======================= FIN MODIF ======================= */
 
 const norm = (s) => (s || "").toLowerCase().trim();
 
@@ -349,7 +396,7 @@ export default function GaugesPanel({ data, range = "all" }) {
           const nb = norm(e?.nombre);
           const p = norm(e?.possession);
 
-        const isTeamEvt =
+          const isTeamEvt =
             team &&
             (a.includes(` ${team}`) ||
               r.includes(` ${team}`) ||
