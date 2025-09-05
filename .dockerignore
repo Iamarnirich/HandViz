@@ -1,8 +1,30 @@
-# Exclure node_modules et fichiers inutiles
+# Dépendances
 node_modules
-npm-debug.log
-dist
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build / cache
 .next
-Dockerfile
-.dockerignore
-.env
+out
+dist
+
+# Git
+.git
+.gitignore
+.gitlab
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+
+# Environnements (ne pas embarquer les secrets dans l'image !)
+.env*
+!.env.example   # sauf le modèle
+
+# Logs
+*.log
+
+# OS/editor junk
+.DS_Store
+*.swp

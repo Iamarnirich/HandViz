@@ -1,22 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",   
+
   images: {
-    // Optionnel mais utile pour de meilleures perfs
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
-      // Logos LNH (tu l'avais déjà)
+      // Logos LNH
       {
         protocol: "https",
         hostname: "www.lnh.fr",
         pathname: "/medias/sports_teams/**",
       },
-      // Google Drive "uc?id=..." (chemin = /uc, les query params ne comptent pas dans le pattern)
+      // Google Drive (uc?id=...)
       {
         protocol: "https",
         hostname: "drive.google.com",
         pathname: "/uc*",
       },
-      // Parfois Drive redirige vers lh3 pour le rendu image
+      // Drive redirection vers lh3
       {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",

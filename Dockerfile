@@ -1,23 +1,32 @@
-# Utilise une image Node officielle
-FROM node:20-alpine
-
-# Définir le répertoire de travail
+# ---- Build stage ----
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package.json package-lock.json* ./
+# Installer dépendances (inclut devDependencies nécessaires au build)
+COPY package*.json ./
+RUN npm ci --include=dev
 
-# Installer les dépendances
-RUN npm install --production
-
-# Copier le reste du code
+# Copier le reste du projet
 COPY . .
 
-# Construire l'app Next.js
+# Build Next.js (standalone mode recommandé)
 RUN npm run build
 
-# Exposer le port Next.js
+# ---- Run stage ----
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+# Variables pour la prod
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Copier uniquement ce qui est nécessaire
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+# Port d’écoute
 EXPOSE 3000
 
-# Démarrer l'app
-CMD ["npm", "start"]
+# Lancement
+CMD ["node", "server.js"]
