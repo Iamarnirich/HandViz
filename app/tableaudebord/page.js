@@ -288,6 +288,21 @@ function DashboardLayout() {
     }
   };
 
+  /* ➕➕ AJOUT MINIMAL : calcul des champs dynamiques pour l’équipe sélectionnée */
+  let offenseField = "resultat_cthb";
+  let defenseField = "resultat_limoges";
+  if (selectedTeam && selectedMatch) {
+    const team = (selectedTeam || "").toLowerCase().trim();
+    const home = (selectedMatch.equipe_locale || "").toLowerCase().trim();
+    const away = (selectedMatch.equipe_visiteuse || "").toLowerCase().trim();
+    const isHome = team === home; // ✅ égalité stricte, plus fiable
+    // (optionnel) sécurité si l'équipe ne matche ni home ni away :
+    // const isHome = team === home ? true : team === away ? false : true;
+    offenseField = isHome ? "resultat_cthb" : "resultat_limoges";
+    defenseField = isHome ? "resultat_limoges" : "resultat_cthb";
+  }
+  /* ⬆️ Fin de l’ajout — rien d’autre ne change */
+
   if (loading) {
     return (
       <p className="text-center mt-10 text-gray-500">
@@ -416,23 +431,38 @@ function DashboardLayout() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <div className="h-full flex flex-col gap-6">
+                  {/* ✅ On passe teamName + champs dynamiques */}
                   <StatGlobalOverview
                     data={filteredEvents}
                     matchCount={matchCountFiltered}
+                    teamName={selectedTeam}
+                    offenseField={offenseField}
+                    defenseField={defenseField}
                   />
                   <div className="w-full flex justify-center">
-                    <TimelineChart data={filteredEvents} />
+                    <TimelineChart 
+                      data={filteredEvents}
+                      matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField} />
                   </div>
                 </div>
                 <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
                   <ImpactGrid
                     data={filteredEvents}
                     matchCount={matchCountFiltered}
+                    teamName={selectedTeam}
+                    offenseField={offenseField}
+                    defenseField={defenseField}
                   />
                   <div className="w-full max-w-3xl aspect-[3/3]">
                     <TerrainHandBall
                       data={filteredEvents}
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                   </div>
                 </div>
@@ -444,11 +474,17 @@ function DashboardLayout() {
                       data={filteredEvents}
                       range="left"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-left"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                   </div>
                   <div className="flex flex-col items-center gap-8 w-full">
@@ -456,28 +492,47 @@ function DashboardLayout() {
                       <UtilisationSecteursChart
                         data={filteredEvents}
                         matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
                       />
                     </div>
 
                     <div className="w-full max-w-6xl px-4">
-                      <EnclenchementsTable data={filteredEvents} />
+                      <EnclenchementsTable 
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField} />
                     </div>
 
                     <div className="w-full max-w-4xl mt-6">
-                      <EventTypePieChart data={filteredEvents} />
+                      <EventTypePieChart 
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField} />
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-6 items-start w-full max-w-[280px]">
                     <GaugesPanel
                       data={filteredEvents}
-                      range="right"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
+                      range="right"
                     />
                     <GaugesPanel
                       data={filteredEvents}
-                      range="bottom-right"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
+                      range="bottom-right"
                     />
                   </div>
                 </div>
@@ -489,23 +544,38 @@ function DashboardLayout() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <div className="h-full flex flex-col gap-6">
+                  {/* ✅ Même passage de props ici */}
                   <StatGlobalOverview
                     data={filteredEvents}
                     matchCount={matchCountFiltered}
+                    teamName={selectedTeam}
+                    offenseField={offenseField}
+                    defenseField={defenseField}
                   />
                   <div className="w-full flex justify-center">
-                    <TimelineChart data={filteredEvents} />
+                    <TimelineChart 
+                      data={filteredEvents}
+                      matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField} />
                   </div>
                 </div>
                 <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
                   <ImpactGrid
                     data={filteredEvents}
                     matchCount={matchCountFiltered}
+                    teamName={selectedTeam}
+                    offenseField={offenseField}
+                    defenseField={defenseField}
                   />
                   <div className="w-full max-w-3xl aspect-[3/3]">
                     <TerrainHandBall
                       data={filteredEvents}
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                   </div>
                 </div>
@@ -517,11 +587,17 @@ function DashboardLayout() {
                       data={filteredEvents}
                       range="left"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-left"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                   </div>
                   <div className="flex flex-col items-center gap-8 w-full">
@@ -529,15 +605,28 @@ function DashboardLayout() {
                       <UtilisationSecteursChart
                         data={filteredEvents}
                         matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
                       />
                     </div>
 
                     <div className="w-full max-w-6xl px-4">
-                      <EnclenchementsTable data={filteredEvents} />
+                      <EnclenchementsTable 
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField} />
                     </div>
 
                     <div className="w-full max-w-4xl mt-6">
-                      <EventTypePieChart data={filteredEvents} />
+                      <EventTypePieChart
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField} />
                     </div>
                   </div>
 
@@ -546,11 +635,17 @@ function DashboardLayout() {
                       data={filteredEvents}
                       range="right"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                     <GaugesPanel
                       data={filteredEvents}
                       range="bottom-right"
                       matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
                     />
                   </div>
                 </div>
@@ -657,7 +752,12 @@ function DashboardLayout() {
       {showHistorique && (
         <div className="w-full flex flex-col items-center justify-center space-y-12">
           <div className="w-full max-w-6xl">
-            <ProgressionTirsChart data={filteredEvents} />
+            <ProgressionTirsChart 
+              data={filteredEvents}
+              matchCount={matchCountFiltered}
+              teamName={selectedTeam}
+              offenseField={offenseField}
+              defenseField={defenseField}/>
           </div>
         </div>
       )}

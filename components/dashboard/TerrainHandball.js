@@ -19,44 +19,51 @@ const secteurs = {
   "7M": { label: "7m", top: "80%", left: "50%" },
 };
 
+// petite normalisation
+const norm = (s) => (s || "").toString().toLowerCase().trim();
+
 export default function TerrainHandball({ data }) {
   const { rapport } = useRapport();
   const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
 
   const statsBySecteur = useMemo(() => {
     const map = {};
-    const equipe = (
-      rapport === "offensif" ? equipeLocale : equipeAdverse
-    )?.toLowerCase();
+    const equipe = norm(rapport === "offensif" ? equipeLocale : equipeAdverse);
 
     if (isTousLesMatchs) {
+      // ✅ On garde ta logique "moyenne par match"
       const parMatch = {};
 
-      data.forEach((e) => {
-        const idMatch = e.id_match;
-        const secteur = e.secteur;
-        const resultat =
-          (rapport === "offensif"
-            ? e.resultat_cthb
-            : e.resultat_limoges
-          )?.toLowerCase() || "";
-
+      (data || []).forEach((e) => {
+        const idMatch = e?.id_match;
+        const secteur = e?.secteur;
         if (!idMatch || !secteur) return;
+
+        const rc = norm(e?.resultat_cthb);
+        const rl = norm(e?.resultat_limoges);
+
+        // 🔁 Choix du champ résultat par rapport :
+        // - Offensif: on privilégie le champ "côté équipe locale" (rc) s'il est rempli, sinon (rl)
+        // - Défensif: on privilégie le champ "côté adverse" (rl) s'il est rempli, sinon (rc)
+        const resultat =
+          rapport === "offensif"
+            ? (rc || rl)
+            : (rl || rc);
 
         if (!parMatch[idMatch]) parMatch[idMatch] = {};
         if (!parMatch[idMatch][secteur]) {
           parMatch[idMatch][secteur] = { tirs: 0, buts: 0 };
         }
 
+        // 🔢 logique inchangée : 1 évènement = 1 tir ; "but" → buts++
         parMatch[idMatch][secteur].tirs++;
         if (resultat.includes("but")) parMatch[idMatch][secteur].buts++;
       });
 
-      // Moyenne des secteurs sur tous les matchs
       const matchCount = Object.keys(parMatch).length;
-
       if (matchCount === 0) return {};
 
+      // agrégation puis moyenne finale
       Object.values(parMatch).forEach((secteursMatch) => {
         for (const [secteur, stats] of Object.entries(secteursMatch)) {
           if (!map[secteur]) map[secteur] = { tirs: 0, buts: 0 };
@@ -65,22 +72,36 @@ export default function TerrainHandball({ data }) {
         }
       });
 
-      // Moyenne finale
       for (const secteur in map) {
         map[secteur].tirs = map[secteur].tirs / matchCount;
         map[secteur].buts = map[secteur].buts / matchCount;
       }
     } else {
-      data.forEach((e) => {
-        const secteur = e.secteur;
-        const resultat =
-          (rapport === "offensif"
-            ? e.resultat_cthb
-            : e.resultat_limoges
-          )?.toLowerCase() || "";
-        const action = e.nom_action?.toLowerCase() || "";
+      // ✅ Mono-match : on borne sur l’équipe, et on choisit dynamiquement le bon champ
+      (data || []).forEach((e) => {
+        const secteur = e?.secteur;
+        if (!secteur) return;
 
-        if (!secteur || !action.includes(equipe)) return;
+        const action = norm(e?.nom_action);
+        // filtre identique à ton code : on garde si l'action contient l'équipe du contexte
+        if (equipe && !action.includes(equipe)) return;
+
+        const rc = norm(e?.resultat_cthb);
+        const rl = norm(e?.resultat_limoges);
+
+        // 🎯 Sélection PAR ÉVÈNEMENT du bon résultat :
+        // - Offensif: si l’équipe figure dans rc → rc ; sinon si dans rl → rl ; sinon fallback rc||rl
+        // - Défensif: (équipe = adversaire) même logique côté adverse
+        let resultat = "";
+        if (rapport === "offensif") {
+          if (equipe && rc.includes(equipe)) resultat = rc;
+          else if (equipe && rl.includes(equipe)) resultat = rl;
+          else resultat = rc || rl;
+        } else {
+          if (equipe && rc.includes(equipe)) resultat = rc;
+          else if (equipe && rl.includes(equipe)) resultat = rl;
+          else resultat = rl || rc;
+        }
 
         if (!map[secteur]) map[secteur] = { tirs: 0, buts: 0 };
         map[secteur].tirs++;
@@ -129,8 +150,7 @@ export default function TerrainHandball({ data }) {
               {pos.label}
             </div>
             <div className="text-[16px] leading-tight">
-              {Math.round(stats.buts)}/{Math.round(stats.tirs)} -{" "}
-              {eff.toFixed(0)}%
+              {Math.round(stats.buts)}/{Math.round(stats.tirs)} - {eff.toFixed(0)}%
             </div>
           </div>
         );

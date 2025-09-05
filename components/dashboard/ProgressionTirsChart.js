@@ -29,24 +29,27 @@ function extractMinuteFromMillis(ms) {
   return Math.floor(Number(ms) / 60000);
 }
 
+const norm = (s) => (s || "").toLowerCase().trim();
+
 export default function ProgressionTirsChart({ data }) {
-  const { equipeLocale, equipeAdverse } = useMatch(); // ✅
+  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch(); // ✅
 
   const { offensif, defensif, events, maxY } = useMemo(() => {
-    const off = {},
-      def = {},
-      evts = [];
+    const off = {};
+    const def = {};
+    const evts = [];
     let max = 0;
 
-    const eqLocal = (equipeLocale || "").toLowerCase(); // ✅
-    const eqAdv = (equipeAdverse || "").toLowerCase(); // ✅
+    const eqLocal = norm(equipeLocale);
+    const eqAdv = norm(equipeAdverse);
 
-    data.forEach((e) => {
-      const resCTHB = e.resultat_cthb?.toLowerCase() || "";
-      const resLIM = e.resultat_limoges?.toLowerCase() || "";
-      const nom = e.nom_action?.toLowerCase() || "";
-      const minute = extractMinuteFromMillis(e.position);
-      if (minute === null || minute > 60) return;
+    (data || []).forEach((e) => {
+      const resCTHB = norm(e?.resultat_cthb);
+      const resLIM = norm(e?.resultat_limoges);
+      const nom = norm(e?.nom_action);
+      const minute = extractMinuteFromMillis(e?.position);
+
+      if (Number.isNaN(minute) || minute < 0 || minute > 60) return;
 
       const addTo = (store, phaseKey) => {
         if (!store[minute]) store[minute] = {};
@@ -54,20 +57,33 @@ export default function ProgressionTirsChart({ data }) {
         max = Math.max(max, store[minute][phaseKey]);
       };
 
-      // ✅ Buts marqués → équipe locale
-      if (resCTHB.includes("but") && resCTHB.includes(eqLocal)) {
+      // ---------- Buts offensifs
+      const isOffensiveGoal = isTousLesMatchs
+        ? resCTHB.startsWith("but ") || resLIM.startsWith("but ")
+        : (!!eqLocal &&
+           (resCTHB.startsWith(`but ${eqLocal}`) ||
+            resLIM.startsWith(`but ${eqLocal}`)));
+
+      if (isOffensiveGoal) {
         for (const { key } of Object.values(PHASES)) {
           if (nom.includes(key)) addTo(off, key);
         }
       }
 
-      // ✅ Buts encaissés → équipe adverse
-      if (resLIM.includes("but") && resLIM.includes(eqAdv)) {
+      // ---------- Buts défensifs (encaissés)
+      const isDefensiveGoal = isTousLesMatchs
+        ? resCTHB.startsWith("but ") || resLIM.startsWith("but ")
+        : (!!eqAdv &&
+           (resCTHB.startsWith(`but ${eqAdv}`) ||
+            resLIM.startsWith(`but ${eqAdv}`)));
+
+      if (isDefensiveGoal) {
         for (const { key } of Object.values(PHASES)) {
           if (nom.includes(key)) addTo(def, key);
         }
       }
 
+      // ---------- Marqueurs d'événements (inchangé)
       if (resCTHB.includes("tto") || resLIM.includes("tto")) {
         evts.push({ type: "tto", minute });
       }
@@ -84,8 +100,8 @@ export default function ProgressionTirsChart({ data }) {
       }
     });
 
-    const formatData = (timeline) => {
-      return Array.from({ length: 61 }, (_, m) => {
+    const formatData = (timeline) =>
+      Array.from({ length: 61 }, (_, m) => {
         const minuteData = { minute: m };
         const phaseCounts = timeline[m] || {};
         for (const phase in phaseCounts) {
@@ -93,7 +109,6 @@ export default function ProgressionTirsChart({ data }) {
         }
         return minuteData;
       });
-    };
 
     return {
       offensif: formatData(off),
@@ -101,7 +116,7 @@ export default function ProgressionTirsChart({ data }) {
       events: evts,
       maxY: max + 1,
     };
-  }, [data, equipeLocale, equipeAdverse]); // ✅
+  }, [data, equipeLocale, equipeAdverse, isTousLesMatchs]); // ✅
 
   const renderBars = (stackId) =>
     Object.entries(PHASES).map(([label, { key, color }]) => (

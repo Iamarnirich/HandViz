@@ -40,68 +40,36 @@ function formatObjectiveBadge(expr) {
   const raw = String(expr).trim();
   const s = raw.replace(/\s+/g, "").toLowerCase();
 
-  // plage a-b → "a–b"
   const mRange = s.match(/^(\d+(?:\.\d+)?)\-(\d+(?:\.\d+)?)$/);
   if (mRange) return `${mRange[1]}–${mRange[2]}`;
-
-  // <=x / <x / >=x / >x → conserve tel quel
   if (/^(<=|<|>=|>)/.test(s)) return raw;
-
-  // nombre nu → juste le nombre (sans signe)
   if (/^\d+(?:\.\d+)?$/.test(s)) return raw;
-
   return raw;
 }
 
 /* ========= MODIF ICI : couleurs du rapport défensif selon tes règles ========= */
 function getGaugeColor(label, value, rapport) {
   if (value === undefined || value === null || isNaN(value)) return "#999";
-
-  // Normalise quelques variantes possibles de libellés
   const L = (label || "").toLowerCase();
 
   if (rapport === "defensif") {
-    // Règles demandées (vert si objectif respecté, rouge sinon)
-    // Possessions: max 54 → ≤54 vert, >54 rouge
-    if (L.includes("possessions")) {
-      return value <= 54 ? "#9FCDA8" : "#F44336";
-    }
-    // Buts encaissés: max 29
-    if (L.includes("buts") && (L.includes("encaiss") || L.includes("reçus"))) {
+    if (L.includes("possessions")) return value <= 54 ? "#9FCDA8" : "#F44336";
+    if (L.includes("buts") && (L.includes("encaiss") || L.includes("reçus")))
       return value <= 29 ? "#9FCDA8" : "#F44336";
-    }
-    // Arrêts GB: objectif 13 min → ≥13 vert
-    if (L.includes("arr") && (L.includes("gb") || L.includes("gardien"))) {
+    if (L.includes("arr") && (L.includes("gb") || L.includes("gardien")))
       return value >= 13 ? "#9FCDA8" : "#F44336";
-    }
-    // Tirs hors cadre: pas encore défini → neutre/or
-    if (L.includes("hors") && L.includes("cadre")) {
-      return "#D4AF37";
-    }
-    // Balles récupérées: objectif 11 min → ≥11 vert
-    if (L.includes("balles") && L.includes("récup")) {
+    if (L.includes("hors") && L.includes("cadre")) return "#D4AF37";
+    if (L.includes("balles") && L.includes("récup"))
       return value >= 11 ? "#9FCDA8" : "#F44336";
-    }
-    // Tirs reçus (aussi "Total tirs reçus"): max 50 → ≤50 vert, >50 rouge
-    if (L.includes("tirs") && (L.includes("reçus") || L.includes("total"))) {
+    if (L.includes("tirs") && (L.includes("reçus") || L.includes("total")))
       return value <= 50 ? "#9FCDA8" : "#F44336";
-    }
-    // Neutralisations: min 21 → ≥21 vert
-    if (L.includes("neutralis")) {
-      return value >= 21 ? "#9FCDA8" : "#F44336";
-    }
-    // 2 min subies: max 2 → ≤2 vert, >2 rouge
-    if (L.includes("2") && L.includes("min") && L.includes("sub")) {
+    if (L.includes("neutralis")) return value >= 21 ? "#9FCDA8" : "#F44336";
+    if (L.includes("2") && L.includes("min") && L.includes("sub"))
       return value <= 2 ? "#9FCDA8" : "#F44336";
-    }
-    // 7m subis: max 3 → ≤3 vert, >3 rouge
-    if ((L.includes("7m") || L.includes("7 m")) && L.includes("sub")) {
+    if ((L.includes("7m") || L.includes("7 m")) && L.includes("sub"))
       return value <= 3 ? "#9FCDA8" : "#F44336";
-    }
-    // Si on ne matche aucun de ces intitulés, on retombe sur l’ancienne logique des % d’efficacité
   }
 
-  // Ancienne logique (inchangée) pour offensif + fallback défensif (efficacités %)
   const seuils = {
     offensif: {
       "Eff. Globale": 55,
@@ -122,7 +90,6 @@ function getGaugeColor(label, value, rapport) {
       "% Réussite Duel Adv": 50,
     },
   };
-
   const sensInverse = [
     "Efficacité déf. Globale",
     "Efficacité déf. Placée",
@@ -155,7 +122,6 @@ function parsePossession(txt) {
 }
 
 function inferTeamsForMatch(events, eqLocal, eqAdv) {
-  // si déjà fournis, on garde
   if (eqLocal && eqAdv) return { team: norm(eqLocal), opp: norm(eqAdv) };
 
   const counts = new Map();
@@ -186,7 +152,6 @@ function inferTeamsForMatch(events, eqLocal, eqAdv) {
     if (m2) bump(m2[2]);
   });
 
-  // ordonne par fréquence
   const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   const guessTeam = eqLocal ? norm(eqLocal) : sorted[0]?.[0] || "";
   const guessOpp = eqAdv
@@ -209,7 +174,7 @@ function avgPctAndCount(items) {
 
 export default function GaugesPanel({ data, range = "all" }) {
   const { rapport } = useRapport();
-  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
+  const { equipeLocale, equipeAdverse } = useMatch();
 
   const stats = useMemo(() => {
     const labelsOrder =
@@ -235,7 +200,26 @@ export default function GaugesPanel({ data, range = "all" }) {
             "% Réussite Duel Direct",
           ];
 
-    //regroupe par match
+    /* 🔹 Hoist: zones duel utilisées dans les 2 branches */
+    const ZONES_DUELS = ["alg", "ald", "central 6m", "1-2d", "1-2g"];
+
+    /* 🔹 Helpers de sélection du bon champ par évènement */
+    const pickOffRes = (e, team) => {
+      const rc = norm(e?.resultat_cthb);
+      const rl = norm(e?.resultat_limoges);
+      if (team && rc.includes(team)) return rc; // notre équipe locale
+      if (team && rl.includes(team)) return rl; // notre équipe visiteuse
+      return rc || rl; // fallback
+    };
+    const pickDefRes = (e, team) => {
+      const rc = norm(e?.resultat_cthb);
+      const rl = norm(e?.resultat_limoges);
+      if (team && rc.includes(team)) return rl; // opposé
+      if (team && rl.includes(team)) return rc; // opposé
+      return rl || rc; // fallback
+    };
+
+    // regroupe par match
     const byMatch = new Map();
     (data || []).forEach((e) => {
       const id = e?.id_match || "_unknown";
@@ -245,24 +229,16 @@ export default function GaugesPanel({ data, range = "all" }) {
     const matchIds = Array.from(byMatch.keys());
     const matchCount = matchIds.length;
 
-    // calcule par match
+    // par match
     const perMatch = matchIds.map((id) => {
       const evts = byMatch.get(id) || [];
-      const { team, opp } = inferTeamsForMatch(
-        evts,
-        equipeLocale,
-        equipeAdverse
-      );
+      const { team, opp } = inferTeamsForMatch(evts, equipeLocale, equipeAdverse);
 
-      // si on n’a rien à quoi se raccrocher, renvoie 0 partout
+      const L = {};
       if (!team && !opp) {
-        const empty = {};
-        labelsOrder.forEach((l) => (empty[l] = { num: 0, den: 0, pct: 0 }));
-        return empty;
+        labelsOrder.forEach((l) => (L[l] = { num: 0, den: 0, pct: 0 }));
+        return L;
       }
-
-      const ZONES_DUELS = ["alg", "ald", "central 6m", "1-2d", "1-2g"];
-      const L = {}; // label -> {num, den, pct}
 
       if (rapport === "defensif") {
         let possAdv = 0,
@@ -279,21 +255,19 @@ export default function GaugesPanel({ data, range = "all" }) {
 
         evts.forEach((e) => {
           const a = norm(e?.nom_action);
-          const r = norm(e?.resultat_limoges);
-          const sect = norm(e?.secteur);
-          const nb = norm(e?.nombre);
           const p = norm(e?.possession);
+          const rc = norm(e?.resultat_cthb);
+          const rl = norm(e?.resultat_limoges);
 
-          // on borne bien au camp adverse
           const isOppAction =
             opp &&
-            (a.includes(` ${opp}`) ||
-              r.includes(` ${opp}`) ||
-              p.includes(` ${opp}`));
+            (a.includes(` ${opp}`) || p.includes(` ${opp}`) || rc.includes(` ${opp}`) || rl.includes(` ${opp}`));
 
           if (isOppAction) {
+            const r = pickDefRes(e, team); // ✅ côté adverse
+
             if (p.includes(`possession ${opp}`)) possAdv++;
-            if (r.startsWith(`but ${opp}`)) butsRecus++;
+            if (r.startsWith(`but `)) butsRecus++;
 
             const isAP = a.startsWith(`attaque ${opp}`);
             const isGE =
@@ -302,29 +276,26 @@ export default function GaugesPanel({ data, range = "all" }) {
               a.startsWith(`mb ${opp}`) ||
               a.startsWith(`transition ${opp}`);
 
-            const isShotAny =
-              r.startsWith(`tir `) || r.startsWith(`but ${opp}`);
-            const isSevenM = sect.includes("7m");
-            const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
+            const isShotAny = r.startsWith(`tir `) || r.startsWith(`but `);
+            const isSevenM = norm(e?.secteur).includes("7m");
+            const inDuelZone = ZONES_DUELS.some((z) => norm(e?.secteur).includes(z));
+
             if (isAP) {
               possAP++;
-              if (r.startsWith(`but ${opp}`)) butsAP++;
-
-              // dénominateur: tirs adverses pris en AP (hors 7m)
+              if (r.startsWith(`but `)) butsAP++;
               if (isShotAny && !isSevenM) tirsAP++;
-
-              // Duel adverse: tir AP + zone Duel (hors 7m)
               if (isShotAny && inDuelZone && !isSevenM) {
                 tirsDuel++;
-                if (r.startsWith(`but ${opp}`)) butsDuel++;
+                if (r.startsWith(`but `)) butsDuel++;
               }
             }
 
             if (isGE) {
               possGE++;
-              if (r.startsWith(`but ${opp}`)) butsGE++;
+              if (r.startsWith(`but `)) butsGE++;
             }
 
+            const nb = norm(e?.nombre);
             if (
               nb.includes("supériorité") &&
               (a.startsWith(`attaque ${opp}`) ||
@@ -334,8 +305,7 @@ export default function GaugesPanel({ data, range = "all" }) {
                 a.startsWith(`transition ${opp}`))
             )
               supPoss++;
-            if (nb.includes("infériorité") && r.startsWith(`but ${opp}`))
-              butsInf++;
+            if (nb.includes("infériorité") && r.startsWith(`but `)) butsInf++;
           }
         });
 
@@ -386,67 +356,52 @@ export default function GaugesPanel({ data, range = "all" }) {
           butsInf = 0,
           tirsDuel = 0,
           butsDuel = 0,
-          butsGE = 0,
-          AP = 0;
+          butsGE = 0;
 
         evts.forEach((e) => {
           const a = norm(e?.nom_action);
-          const r = norm(e?.resultat_cthb);
-          const sect = norm(e?.secteur);
-          const nb = norm(e?.nombre);
           const p = norm(e?.possession);
+          const rc = norm(e?.resultat_cthb);
+          const rl = norm(e?.resultat_limoges);
 
+          // event lié à notre équipe si elle est citée dans action / possession / l’un des 2 champs résultat
           const isTeamEvt =
             team &&
             (a.includes(` ${team}`) ||
-              r.includes(` ${team}`) ||
-              p.startsWith(`possession ${team}`));
+              p.startsWith(`possession ${team}`) ||
+              rc.includes(` ${team}`) ||
+              rl.includes(` ${team}`));
           if (!isTeamEvt) return;
 
+          const r = pickOffRes(e, team); // ✅ côté de notre équipe
+
           if (p.startsWith(`possession ${team}`)) poss++;
-          if (a.startsWith(`attaque ${team}`)) possAP++;
-          if (
+          const isAP = a.startsWith(`attaque ${team}`);
+          const isGE =
             a.startsWith(`ca ${team}`) ||
             a.startsWith(`er ${team}`) ||
             a.startsWith(`mb ${team}`) ||
-            a.startsWith(`transition ${team}`)
-          )
-            possGE++;
+            a.startsWith(`transition ${team}`);
+          if (isAP) possAP++;
+          if (isGE) possGE++;
 
-          if (
-            nb.includes("supériorité") &&
-            (a.startsWith(`attaque ${team}`) ||
-              a.startsWith(`ca ${team}`) ||
-              a.startsWith(`er ${team}`) ||
-              a.startsWith(`mb ${team}`) ||
-              a.startsWith(`transition ${team}`))
-          )
-            supPoss++;
-          if (
-            nb.includes("infériorité") &&
-            (a.startsWith(`attaque ${team}`) ||
-              a.startsWith(`ca ${team}`) ||
-              a.startsWith(`er ${team}`) ||
-              a.startsWith(`mb ${team}`) ||
-              a.startsWith(`transition ${team}`))
-          )
-            infPoss++;
+          const nb = norm(e?.nombre);
+          if (nb.includes("supériorité") && (isAP || isGE)) supPoss++;
+          if (nb.includes("infériorité") && (isAP || isGE)) infPoss++;
 
-          const isTir = r.startsWith(`but ${team}`) || r.startsWith("tir ");
-          if (isTir && !sect.includes("7m")) {
+          const sect = norm(e?.secteur);
+          const isSevenM = sect.includes("7m");
+          const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
+          const isShotAny = r.startsWith(`tir `) || r.startsWith(`but ${team}`);
+
+          if (!isSevenM && isShotAny) {
             tirsH7++;
             if (r.startsWith(`but ${team}`)) butsH7++;
           }
-          const isSevenM = sect.includes("7m");
-          const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
-          if (a.startsWith(`attaque ${team}`)) {
-            AP++;
+
+          if (isAP) {
             if (r.startsWith(`but ${team}`)) butsAP++;
-            // dénominateur 'tirs en AP' (hors 7m) pour rester cohérent
-            if (
-              (r.startsWith("tir ") || r.startsWith(`but ${team}`)) &&
-              !isSevenM
-            ) {
+            if (isShotAny && !isSevenM) {
               tirsAP++;
               if (inDuelZone) {
                 tirsDuel++;
@@ -454,18 +409,13 @@ export default function GaugesPanel({ data, range = "all" }) {
               }
             }
           }
-          if (sect.includes("7m") && a.startsWith(`att 7m ${team}`)) {
+
+          if (isSevenM && a.startsWith(`att 7m ${team}`)) {
             tirs7m++;
             if (r.startsWith(`but ${team}`)) buts7m++;
           }
 
-          if (
-            (a.startsWith(`ca ${team}`) ||
-              a.startsWith(`er ${team}`) ||
-              a.startsWith(`mb ${team}`) ||
-              a.startsWith(`transition ${team}`)) &&
-            r.startsWith(`but ${team}`)
-          ) {
+          if (isGE && r.startsWith(`but ${team}`)) {
             butsGE++;
           }
 
@@ -527,7 +477,7 @@ export default function GaugesPanel({ data, range = "all" }) {
         };
       }
 
-      // garantie anti >100
+      // garde-fous
       labelsOrder.forEach((lb) => {
         const x = L[lb];
         if (!x) return;
@@ -540,7 +490,7 @@ export default function GaugesPanel({ data, range = "all" }) {
       return L;
     });
 
-    // sortie : si 1 match => valeurs brutes; sinon moyenne des %
+    // sortie
     const out = labelsOrder.map((label) => {
       if (matchCount === 1) {
         const only = perMatch[0][label] || { num: 0, den: 0, pct: 0 };
@@ -550,7 +500,7 @@ export default function GaugesPanel({ data, range = "all" }) {
           count: `${only.num}/${only.den}`,
           color: getGaugeColor(label, only.pct, rapport),
         };
-      } else {
+        } else {
         const series = perMatch.map(
           (m) => m[label] || { num: 0, den: 0, pct: 0 }
         );
@@ -558,7 +508,6 @@ export default function GaugesPanel({ data, range = "all" }) {
         return {
           label,
           value: isNaN(pct) ? 0 : pct,
-          // moyenne affichée avec 1 décimal pour info
           count: `${num.toFixed(1)}/${den.toFixed(1)}`,
           color: getGaugeColor(label, pct, rapport),
         };
@@ -577,12 +526,10 @@ export default function GaugesPanel({ data, range = "all" }) {
     return stats;
   }, [stats, range]);
 
-  // Ajout MINIMAL : badge objectif à côté du label
   return (
     <div className="grid gap-4 grid-cols-1">
       {displayedStats.map((g, idx) => {
-        const rawObj =
-          (OBJECTIFS_GAUGES[rapport] || {})[g.label] ?? null;
+        const rawObj = (OBJECTIFS_GAUGES[rapport] || {})[g.label] ?? null;
         const badgeText = formatObjectiveBadge(rawObj);
 
         return (

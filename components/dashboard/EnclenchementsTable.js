@@ -4,7 +4,12 @@ import { useMemo } from "react";
 import { useRapport } from "@/contexts/RapportContext";
 import { useMatch } from "@/contexts/MatchContext";
 
-export default function EnclenchementsTable({ data }) {
+export default function EnclenchementsTable({
+  data,
+  teamName,          // ✅ pris en compte
+  offenseField,      // (passé mais non intrusif: calculs inchangés)
+  defenseField,      // (passé mais non intrusif: calculs inchangés)
+}) {
   const { rapport } = useRapport();
   const { equipeLocale, isTousLesMatchs } = useMatch();
 
@@ -14,9 +19,9 @@ export default function EnclenchementsTable({ data }) {
     const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
     return m ? { teamA: m[1].trim(), teamB: m[2].trim() } : null;
   };
-  const inferTeamForMatch = (events, eqLocalGuess = "") => {
-    // si une équipe locale est fournie (au cas où), on la prend
-    if (eqLocalGuess) return norm(eqLocalGuess);
+  const inferTeamForMatch = (events, eqGuess = "") => {
+    // ✅ priorité à l'équipe sélectionnée si fournie
+    if (eqGuess) return norm(eqGuess);
 
     // sinon on déduit la plus fréquente dans "attaque X" et "possession X_Y_"
     const counts = new Map();
@@ -43,51 +48,80 @@ export default function EnclenchementsTable({ data }) {
     return sorted[0]?.[0] || "";
   };
 
+  // ✅ Sélection dynamique du bon champ résultat par évènement (pour supporter équipe visiteuse)
+  const pickOffRes = (e, team) => {
+    const rc = norm(e?.resultat_cthb);
+    const rl = norm(e?.resultat_limoges);
+    if (team && rc.includes(team)) return rc; // l’équipe (par évènement) est côté CTHB
+    if (team && rl.includes(team)) return rl; // l’équipe (par évènement) est côté LIMOGES
+    return rc || rl || "";                    // fallback neutre
+  };
+  const pickDefRes = (e, team) => {
+    const rc = norm(e?.resultat_cthb);
+    const rl = norm(e?.resultat_limoges);
+    if (team && rc.includes(team)) return rl; // on veut le côté adverse
+    if (team && rl.includes(team)) return rc; // on veut le côté adverse
+    return rl || rc || "";                    // fallback
+  };
+
   const lignes = useMemo(() => {
     if (rapport !== "offensif" && rapport !== "defensif") return [];
 
     const typesFocus = ["2vs2", "duel", "bloc", "écran"];
-    const equipe = (equipeLocale || "").toLowerCase();
+
+    // ✅ équipe de référence: priorité à teamName (sélecteur), sinon équipeLocale (ancienne logique)
+    const equipeRef = norm(teamName || equipeLocale);
 
     const estBonneEquipe = (evt) => {
-      if (isTousLesMatchs) return true; // en "Tous les matchs", on garde
-      const action = (evt.nom_action || "").toLowerCase();
-      const resultat = (evt.resultat_cthb || "").toLowerCase();
-      return action.includes(equipe) || resultat.includes(equipe);
+      if (isTousLesMatchs) return true; // en "Tous les matchs", on garde tout (moyennes par match)
+      const action = norm(evt.nom_action);
+      const resultatC = norm(evt.resultat_cthb);
+      const resultatL = norm(evt.resultat_limoges);
+      // on garde l’évènement si l’équipe apparaît soit dans l’action soit dans l’un des résultats
+      return (
+        (!!equipeRef &&
+          (action.includes(equipeRef) ||
+            resultatC.includes(equipeRef) ||
+            resultatL.includes(equipeRef))) ||
+        false
+      );
     };
 
-    // SUCCÈS générique (1 match) — dépend du rapport, repose sur "equipe"
-    const estSuccesMonoMatch = (evt) => {
-      const rOff = (evt.resultat_cthb || "").toLowerCase();
-      const rDef = (evt.resultat_limoges || "").toLowerCase();
-
-      if (rapport === "offensif") {
-        return (
-          (equipe && rOff.startsWith(`but ${equipe}`)) ||
-          (equipe && rOff.startsWith(`7m obtenu ${equipe}`)) ||
-          rOff.includes("2' obtenu")
-        );
-      } else {
-        return (
-          rDef.includes("tir hc") ||
-          rDef.includes("tir arrêté") ||
-          rDef.includes("tir arret") ||
-          rDef.includes("perte de balle")
-        );
-      }
-    };
-
-    // ---------- Cas 1 : un seul match -> agrégation simple (inchangé)
+    // ---------- Cas 1 : un seul match -> agrégation simple
     if (!isTousLesMatchs) {
       const parEnclenchement = new Map();
 
+      const team = inferTeamForMatch(data, equipeRef); // ✅ si teamName est présent, on l’utilise
+
       const isAPEventMono = (evt) => {
-        const a = (evt.nom_action || "").toLowerCase().trim();
+        const a = norm(evt?.nom_action);
         if (!a.startsWith("attaque ")) return false;
-        if (!equipe) return false;
+        if (!team) return false;
+        // offensif: AP de l'équipe; défensif: AP de l'adversaire
         return rapport === "offensif"
-          ? a.startsWith(`attaque ${equipe}`)
-          : !a.startsWith(`attaque ${equipe}`);
+          ? a.startsWith(`attaque ${team}`)
+          : !a.startsWith(`attaque ${team}`);
+      };
+
+      // SUCCÈS (mono-match) basé sur le bon champ par évènement
+      const estSuccesMonoMatch = (evt) => {
+        const rOff = pickOffRes(evt, team);
+        const rDef = pickDefRes(evt, team);
+
+        if (rapport === "offensif") {
+          return (
+            (team && rOff.startsWith(`but ${team}`)) ||
+            (team && rOff.startsWith(`7m obtenu ${team}`)) ||
+            rOff.includes("2' obtenu")
+          );
+        } else {
+          return (
+            rDef.includes("tir hc") ||
+            rDef.includes("tir arrêté") ||
+            rDef.includes("tir arret") ||
+            rDef.includes("perte de balle")
+          );
+        }
       };
 
       data.forEach((evt) => {
@@ -116,16 +150,14 @@ export default function EnclenchementsTable({ data }) {
         // sous-catégories (sur la base AP)
         typesFocus.forEach((type) => {
           const sousEnsemble = evenements.filter((evt) =>
-            (evt.temps_fort || "").toLowerCase().includes(type)
+            norm(evt?.temps_fort).includes(type)
           );
           const denominateur = sousEnsemble.length;
           const numerateur = sousEnsemble.filter(estSuccesMonoMatch).length;
 
           ligne[type] =
             denominateur > 0
-              ? `${((numerateur / denominateur) * 100).toFixed(
-                  1
-                )}% (${denominateur})`
+              ? `${((numerateur / denominateur) * 100).toFixed(1)}% (${denominateur})`
               : "0% (0)";
         });
 
@@ -174,13 +206,10 @@ export default function EnclenchementsTable({ data }) {
     matchIds.forEach((mid) => {
       const events = byMatch.get(mid) || [];
 
-      // 🔑 Déduire l’équipe de référence pour ce match si elle n’est pas fournie
-      const teamThisMatch = inferTeamForMatch(events, equipeLocale);
-
-      // si on n’arrive pas à déduire l’équipe, on ignore ce match pour éviter des faux positifs
+      // ✅ priorité à l’équipe sélectionnée; sinon déduction
+      const teamThisMatch = inferTeamForMatch(events, equipeRef);
       if (!teamThisMatch) return;
 
-      // Définition locale des helpers (dépendent de teamThisMatch)
       const isAPEventWithTeam = (evt) => {
         const a = norm(evt?.nom_action);
         if (!a.startsWith("attaque ")) return false;
@@ -190,8 +219,8 @@ export default function EnclenchementsTable({ data }) {
       };
 
       const estSuccesThisMatch = (evt) => {
-        const rOff = norm(evt?.resultat_cthb);
-        const rDef = norm(evt?.resultat_limoges);
+        const rOff = pickOffRes(evt, teamThisMatch);
+        const rDef = pickDefRes(evt, teamThisMatch);
         if (rapport === "offensif") {
           return (
             rOff.startsWith(`but ${teamThisMatch}`) ||
@@ -280,7 +309,7 @@ export default function EnclenchementsTable({ data }) {
     });
 
     return lignesCalculees;
-  }, [data, rapport, equipeLocale, isTousLesMatchs]);
+  }, [data, rapport, teamName, equipeLocale, isTousLesMatchs]); // ✅ dépend aussi de teamName
 
   if ((rapport !== "offensif" && rapport !== "defensif") || lignes.length === 0)
     return null;
