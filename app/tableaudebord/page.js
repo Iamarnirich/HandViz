@@ -71,7 +71,7 @@ function DashboardLayout() {
       const { data: evenementsData } = await supabase
         .from("evenements")
         .select("*")
-        .range(0, 10000);
+        .range(0, 50000);
 
       const { data: clubsData } = await supabase
         .from("clubs")

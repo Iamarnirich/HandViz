@@ -49,11 +49,26 @@ function convertirTemps(val) {
   if (!val) return "00:00:00";
   const str = String(val).trim();
   const parts = str.split(":").map((x) => Number(x));
-  if (parts.length === 2)
-    return `00:${parts.map((x) => String(x).padStart(2, "0")).join(":")}`;
-  if (parts.length === 3)
-    return parts.map((x) => String(x).padStart(2, "0")).join(":");
-  return "00:00:00";
+  let h = 0, m = 0, s = 0;
+  if (parts.length === 2) {
+    m = parts[0];
+    s = parts[1];
+  } else if (parts.length === 3) {
+    h = parts[0];
+    m = parts[1];
+    s = parts[2];
+  }
+  // Correction des dépassements
+  h += Math.floor(m / 60);
+  m = m % 60;
+  h += Math.floor(s / 3600);
+  m += Math.floor(s / 60);
+  s = s % 60;
+  if (m >= 60) {
+    h += Math.floor(m / 60);
+    m = m % 60;
+  }
+  return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
 function normaliserRow(row, equipe_locale, equipe_visiteuse) {

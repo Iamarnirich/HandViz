@@ -99,13 +99,10 @@ function getCardClassesByObjective(status) {
   return "bg-white text-[#1a1a1a]";
 }
 
-/* =========================================================
-   Component
-   ========================================================= */
 export default function StatGlobalOverview({
   data,
   matchCount,
-  teamName,                                   // ✅ PRIORITÉ à l’équipe choisie
+  teamName,
   offenseField = "resultat_cthb",
   defenseField = "resultat_limoges",
 }) {
@@ -125,7 +122,6 @@ export default function StatGlobalOverview({
     if ((!equipeLocale || !equipeAdverse) && !isTousLesMatchs) return {};
 
     const norm = (s) => (s || "").toLowerCase().trim();
-
     const parsePossession = (txt) => {
       const s = norm(txt);
       const m = s.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
@@ -134,7 +130,6 @@ export default function StatGlobalOverview({
 
     const initPhaseStats = () => ({ total: 0, ap: 0, ca: 0, er: 0, mb: 0, jt: 0 });
 
-    // équipe analysée (PRIORITÉ: teamName du sélecteur)
     const inferTeam = () => {
       const counts = {};
       const bump = (name) => { if (!name) return; const n = name.toLowerCase().trim(); counts[n] = (counts[n] || 0) + 1; };
@@ -152,25 +147,23 @@ export default function StatGlobalOverview({
       return best;
     };
 
-    const team = norm(teamName) || norm(equipeLocale) || inferTeam(); // ✅
+    const team = norm(teamName) || norm(equipeLocale) || inferTeam();
 
-    // utilitaires : choisir le bon champ PAR ÉVÈNEMENT en multi-match
     const pickOffResult = (e) => {
       if (!isTousLesMatchs) return norm(e?.[offenseField] || "");
       const rc = norm(e.resultat_cthb), rl = norm(e.resultat_limoges);
-      if (team && rc.includes(team)) return rc;   // l'équipe était locale
-      if (team && rl.includes(team)) return rl;   // l'équipe était visiteuse
-      return norm(e?.[offenseField] || "");       // fallback
+      if (team && rc.includes(team)) return rc;
+      if (team && rl.includes(team)) return rl;
+      return norm(e?.[offenseField] || "");
     };
     const pickDefResult = (e) => {
       if (!isTousLesMatchs) return norm(e?.[defenseField] || "");
       const rc = norm(e.resultat_cthb), rl = norm(e.resultat_limoges);
-      if (team && rc.includes(team)) return rl;   // champ opposé (adverse)
-      if (team && rl.includes(team)) return rc;   // champ opposé (adverse)
-      return norm(e?.[defenseField] || "");       // fallback
+      if (team && rc.includes(team)) return rl;
+      if (team && rl.includes(team)) return rc;
+      return norm(e?.[defenseField] || "");
     };
 
-    // possessions
     const possRows = data.filter((r) => !!parsePossession(r.possession));
     const matchIdsWithTeam = new Set(
       possRows
@@ -214,7 +207,6 @@ export default function StatGlobalOverview({
 
       let butsAP = 0, neutralAP = 0;
 
-      // possessions défensives
       const totalPossInTeamMatches = possRows.filter((r) => matchIdsWithTeam.has(r.id_match)).length;
       const offPossCount = possRows.filter((r) => {
         const p = parsePossession(r.possession);
@@ -243,48 +235,82 @@ export default function StatGlobalOverview({
       result.possessions.mb = Number((mb / gamesTeam).toFixed(1));
       result.possessions.jt = Number((jt / gamesTeam).toFixed(1));
 
+      // ==== Correction: identification explicite de l’adversaire (opp) par évènement
       data.forEach((e) => {
         const action = norm(e.nom_action);
-        const resultat = pickDefResult(e);          // champ adverse par-évènement
+        const resultat = pickDefResult(e);
         const sanction = norm(e.sanctions);
 
-        const isAdv = resultat.length > 0;          // s’il y a du texte côté adverse → adversaire
-        const isAP = action.startsWith("attaque ");
+        // Détermine opp à partir de la possession de la ligne
+        const p = parsePossession(e.possession);
+        let opp = "";
+        if (p && team) {
+          opp = p.equipe === team ? p.adv : p.equipe;
+        }
+
+        // Si on a bien l’adversaire identifié, on borne les évènements à ceux qui le citent.
+        // Sinon, on garde un fallback "générique" (au cas où la donnée n’est pas taggée).
+        const citesOpp = opp && (action.includes(opp) || resultat.includes(opp));
+        const isAdv = citesOpp || (!!resultat && !resultat.includes("encaissé"));
+
+        const isAP = opp ? action.startsWith("attaque " + opp) : action.startsWith("attaque ");
         const phaseKeys = {
-          ca: action.startsWith("ca "),
-          er: action.startsWith("er "),
-          mb: action.startsWith("mb "),
-          jt: action.startsWith("transition "),
+          ca: opp ? action.startsWith("ca " + opp) : action.startsWith("ca "),
+          er: opp ? action.startsWith("er " + opp) : action.startsWith("er "),
+          mb: opp ? action.startsWith("mb " + opp) : action.startsWith("mb "),
+          jt: opp ? action.startsWith("transition " + opp) : action.startsWith("transition "),
         };
 
-        if (isAdv) {
-          const inc = (key, add = true) => {
-            if (add) result[key].total++;
-            if (isAP && result[key].ap !== undefined) result[key].ap++;
-            if (phaseKeys.ca && result[key].ca !== undefined) result[key].ca++;
-            if (phaseKeys.er && result[key].er !== undefined) result[key].er++;
-            if (phaseKeys.mb && result[key].mb !== undefined) result[key].mb++;
-            if (phaseKeys.jt && result[key].jt !== undefined) result[key].jt++;
-          };
+        if (!isAdv) return;
 
-          if (resultat.startsWith("but ") && !resultat.includes("encaissé")) { inc("butsEncaisses"); if (isAP) butsAP++; }
-          if (resultat.includes("tir hc ")) inc("tirsHorsCadreAdv");
-          if (resultat.includes("tir arrêté ") || resultat.includes("tir arret ")) inc("arrets");
+        const inc = (key, add = true) => {
+          if (add) result[key].total++;
+          if (isAP && result[key].ap !== undefined) result[key].ap++;
+          if (phaseKeys.ca && result[key].ca !== undefined) result[key].ca++;
+          if (phaseKeys.er && result[key].er !== undefined) result[key].er++;
+          if (phaseKeys.mb && result[key].mb !== undefined) result[key].mb++;
+          if (phaseKeys.jt && result[key].jt !== undefined) result[key].jt++;
+        };
 
-          if (
-            resultat.startsWith("but ") ||
-            resultat.includes("tir contré ") ||
-            resultat.includes("tir hc ") ||
-            resultat.includes("tir arrêté ") ||
-            resultat.includes("tir arret ")
-          ) inc("tirsTotaux");
-
-          if (resultat.includes("perte de balle ")) inc("ballesRecuperees");
-          if (resultat.includes("neutralisée")) { result.neutralisationsReal.total++; if (isAP) neutralAP++; }
-
-          if (sanction.startsWith("2' ") && sanction.includes("subies")) result.deuxMinSubies.total++;
-          if (resultat.startsWith("7m ")) result.septMSubis.total++;
+        // --- BUTS ENCAISSÉS (par l’adversaire)
+        if (opp ? resultat.startsWith("but " + opp) : resultat.startsWith("but ")) {
+          inc("butsEncaisses");
+          if (isAP) butsAP++;
         }
+
+        // --- TIRS HC / ARRÊTÉS / CONTRÉS (de l’adversaire)
+        const hasHC = opp ? resultat.includes("tir hc " + opp) : resultat.includes("tir hc ");
+        const hasArret =
+          (opp ? resultat.includes("tir arrêté " + opp) : resultat.includes("tir arrêté ")) ||
+          (opp ? resultat.includes("tir arret " + opp) : resultat.includes("tir arret "));
+        const hasContre =
+          opp ? resultat.includes("tir contré " + opp) || resultat.includes("tir contre " + opp)
+              : resultat.includes("tir contré ") || resultat.includes("tir contre ");
+
+        if (hasHC) inc("tirsHorsCadreAdv");
+        if (hasArret) inc("arrets");
+
+        if (
+          (opp ? resultat.startsWith("but " + opp) : resultat.startsWith("but ")) ||
+          hasContre || hasHC || hasArret
+        ) {
+          inc("tirsTotaux");
+        }
+
+        // --- BALLES RÉCUPÉRÉES (pertes de balle adverses)
+        if (opp ? resultat.includes("perte de balle " + opp) : resultat.includes("perte de balle ")) {
+          inc("ballesRecuperees");
+        }
+
+        // --- NEUTRALISATIONS RÉALISÉES
+        if (resultat.includes("neutralisée")) {
+          result.neutralisationsReal.total++;
+          if (isAP) neutralAP++;
+        }
+
+        // --- 2' SUBIES et 7m SUBIS (par l’adversaire)
+        if (sanction.startsWith("2' ") && sanction.includes("subies")) result.deuxMinSubies.total++;
+        if (opp ? resultat.startsWith("7m " + opp) : resultat.startsWith("7m ")) result.septMSubis.total++;
       });
 
       result.indiceAgressivite.total = butsAP > 0 ? Number((neutralAP / butsAP).toFixed(2)) : "—";
@@ -306,7 +332,6 @@ export default function StatGlobalOverview({
 
     let butsAP = 0, neutralAP = 0;
 
-    // possessions offensives
     const offPossRows = possRows.filter((r) => {
       const p = parsePossession(r.possession);
       return p && p.equipe === team && matchIdsWithTeam.has(r.id_match);
@@ -316,7 +341,7 @@ export default function StatGlobalOverview({
     let ap = 0, ca = 0, er = 0, mb = 0, jt = 0;
     for (const r of offPossRows) {
       const p = parsePossession(r.possession); if (!p) continue;
-      const a = norm(r.nom_action);
+      const a = (r.nom_action || "").toLowerCase().trim();
       if (a.startsWith("attaque " + p.equipe)) ap++;
       if (a.startsWith("ca " + p.equipe)) ca++;
       if (a.startsWith("er " + p.equipe)) er++;
@@ -330,9 +355,9 @@ export default function StatGlobalOverview({
     resultOff.possessions.jt = Number((jt / gamesTeam).toFixed(1));
 
     data.forEach((e) => {
-      const action = norm(e.nom_action);
-      const resultat = pickOffResult(e);           // champ de l’équipe par-évènement
-      const sanction = norm(e.sanctions);
+      const action = (e.nom_action || "").toLowerCase().trim();
+      const resultat = pickOffResult(e);
+      const sanction = (e.sanctions || "").toLowerCase().trim();
 
       const isTeam = team && (action.includes(team) || resultat.includes(team));
       const isAP = team ? action.startsWith("attaque " + team) : false;
@@ -355,6 +380,7 @@ export default function StatGlobalOverview({
 
         if (
           resultat.startsWith("tir contré " + team) ||
+          resultat.startsWith("tir contre " + team) || // tolérance
           resultat.startsWith("tir arrêté " + team) ||
           resultat.startsWith("tir arret " + team) ||
           resultat.startsWith("tir hc " + team)
@@ -367,6 +393,7 @@ export default function StatGlobalOverview({
         if (
           resultat.startsWith("but " + team) ||
           resultat.startsWith("tir contré " + team) ||
+          resultat.startsWith("tir contre " + team) ||
           resultat.startsWith("tir hc " + team) ||
           resultat.startsWith("tir arrêté " + team) ||
           resultat.startsWith("tir arret " + team)
