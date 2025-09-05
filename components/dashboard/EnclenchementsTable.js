@@ -6,9 +6,9 @@ import { useMatch } from "@/contexts/MatchContext";
 
 export default function EnclenchementsTable({
   data,
-  teamName,          // ✅ pris en compte
-  offenseField,      // (passé mais non intrusif: calculs inchangés)
-  defenseField,      // (passé mais non intrusif: calculs inchangés)
+  teamName,          // pris en compte
+  offenseField,     
+  defenseField,      
 }) {
   const { rapport } = useRapport();
   const { equipeLocale, isTousLesMatchs } = useMatch();
@@ -20,10 +20,10 @@ export default function EnclenchementsTable({
     return m ? { teamA: m[1].trim(), teamB: m[2].trim() } : null;
   };
   const inferTeamForMatch = (events, eqGuess = "") => {
-    // ✅ priorité à l'équipe sélectionnée si fournie
+    //priorité à l'équipe sélectionnée si elle est fournie
     if (eqGuess) return norm(eqGuess);
 
-    // sinon on déduit la plus fréquente dans "attaque X" et "possession X_Y_"
+    // sinon on déduit la plus fréquente dans "attaque" et "possession"
     const counts = new Map();
     const bump = (name) => {
       if (!name) return;
@@ -48,12 +48,12 @@ export default function EnclenchementsTable({
     return sorted[0]?.[0] || "";
   };
 
-  // ✅ Sélection dynamique du bon champ résultat par évènement (pour supporter équipe visiteuse)
+  //Sélection dynamique du bon champ résultat par évènement (pour supporter équipe visiteuse)
   const pickOffRes = (e, team) => {
     const rc = norm(e?.resultat_cthb);
     const rl = norm(e?.resultat_limoges);
-    if (team && rc.includes(team)) return rc; // l’équipe (par évènement) est côté CTHB
-    if (team && rl.includes(team)) return rl; // l’équipe (par évènement) est côté LIMOGES
+    if (team && rc.includes(team)) return rc; 
+    if (team && rl.includes(team)) return rl; 
     return rc || rl || "";                    // fallback neutre
   };
   const pickDefRes = (e, team) => {
@@ -69,7 +69,7 @@ export default function EnclenchementsTable({
 
     const typesFocus = ["2vs2", "duel", "bloc", "écran"];
 
-    // ✅ équipe de référence: priorité à teamName (sélecteur), sinon équipeLocale (ancienne logique)
+    //équipe de référence: priorité à teamName (sélecteur), sinon équipeLocale (ancienne logique)
     const equipeRef = norm(teamName || equipeLocale);
 
     const estBonneEquipe = (evt) => {
@@ -87,11 +87,11 @@ export default function EnclenchementsTable({
       );
     };
 
-    // ---------- Cas 1 : un seul match -> agrégation simple
+    //Cas 1 : un seul match -> agrégation simple
     if (!isTousLesMatchs) {
       const parEnclenchement = new Map();
 
-      const team = inferTeamForMatch(data, equipeRef); // ✅ si teamName est présent, on l’utilise
+      const team = inferTeamForMatch(data, equipeRef); //si teamName est présent, on l’utilise
 
       const isAPEventMono = (evt) => {
         const a = norm(evt?.nom_action);
@@ -103,7 +103,6 @@ export default function EnclenchementsTable({
           : !a.startsWith(`attaque ${team}`);
       };
 
-      // SUCCÈS (mono-match) basé sur le bon champ par évènement
       const estSuccesMonoMatch = (evt) => {
         const rOff = pickOffRes(evt, team);
         const rDef = pickDefRes(evt, team);
@@ -126,7 +125,7 @@ export default function EnclenchementsTable({
 
       data.forEach((evt) => {
         if (!estBonneEquipe(evt)) return;
-        if (!isAPEventMono(evt)) return; // AP seulement
+        if (!isAPEventMono(evt)) return; 
         const encl = (evt.enclenchement || "").trim();
         if (!encl) return;
         if (!parEnclenchement.has(encl)) parEnclenchement.set(encl, []);
@@ -173,8 +172,8 @@ export default function EnclenchementsTable({
       return lignesCalculees;
     }
 
-    // ---------- Cas 2 : Tous les matchs -> moyenne par match
-    // 1) Regrouper par match
+    //Cas 2 : Tous les matchs -> moyenne par match
+    //Regrouper par match
     const byMatch = new Map();
     (data || []).forEach((evt) => {
       const id = evt?.id_match || "_unknown";
@@ -184,7 +183,7 @@ export default function EnclenchementsTable({
     const matchIds = Array.from(byMatch.keys());
     const nbMatches = matchIds.length || 1;
 
-    // Accumulateur global
+    // on l'utilise pour accumuler 
     const acc = new Map();
     const ensure = (encl) => {
       if (!acc.has(encl)) {
@@ -206,7 +205,7 @@ export default function EnclenchementsTable({
     matchIds.forEach((mid) => {
       const events = byMatch.get(mid) || [];
 
-      // ✅ priorité à l’équipe sélectionnée; sinon déduction
+      // priorité à l’équipe sélectionnée; sinon déduction
       const teamThisMatch = inferTeamForMatch(events, equipeRef);
       if (!teamThisMatch) return;
 
@@ -277,7 +276,7 @@ export default function EnclenchementsTable({
       }
     });
 
-    // 3) Lignes finales (moyennes)
+    
     const lignesCalculees = [];
     for (const [encl, a] of acc.entries()) {
       const usageMoy = a.sumUsageAllMatches / nbMatches; // moyenne d’utilisation par match
@@ -309,7 +308,7 @@ export default function EnclenchementsTable({
     });
 
     return lignesCalculees;
-  }, [data, rapport, teamName, equipeLocale, isTousLesMatchs]); // ✅ dépend aussi de teamName
+  }, [data, rapport, teamName, equipeLocale, isTousLesMatchs]); //dépend aussi de teamName
 
   if ((rapport !== "offensif" && rapport !== "defensif") || lignes.length === 0)
     return null;
@@ -353,12 +352,6 @@ export default function EnclenchementsTable({
           </tbody>
         </table>
       </div>
-      {isTousLesMatchs && (
-        <p className="text-xs text-gray-500 mt-2">
-          En mode <strong>Tous les matchs</strong> : les valeurs affichées sont
-          des <strong>moyennes par match</strong>.
-        </p>
-      )}
     </div>
   );
 }
