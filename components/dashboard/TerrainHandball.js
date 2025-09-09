@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { useMatch } from "@/contexts/MatchContext";
 import { useRapport } from "@/contexts/RapportContext";
 
-// Positionnement (inchangé)
+// Emplacements sur le terrain
 const secteurs = {
   ALG: { top: "10%", left: "15%" },
   ALD: { top: "10%", left: "85%" },
@@ -21,104 +21,149 @@ const secteurs = {
 
 const norm = (s) => (s || "").toString().toLowerCase().trim();
 
-// fait correspondre les valeurs data => clés d’affichage ci-dessus
-const canonicalizeSecteur = (raw) => {
+function canonicalizeSecteur(raw) {
   const s = norm(raw);
-  // mappe "7m" -> "7M"
   if (s === "7m") return "7M";
-  // essaie de retrouver la clé en ignorant la casse/accents/espaces
   const found = Object.keys(secteurs).find((k) => norm(k) === s);
-  return found || raw || "";
-};
+  return found || (raw || "");
+}
 
-export default function TerrainHandball({ data }) {
+function parsePossession(txt) {
+  const s = norm(txt);
+  const m = s.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+  return m ? { equipe: m[1].trim(), adv: m[2].trim() } : null;
+}
+
+function getPhaseAndTeam(action) {
+  const s = norm(action);
+  const m = s.match(/^(attaque|transition|mb|ca|er)\s+([^(]+)/i);
+  if (!m) return { phase: "", team: "" };
+  return { phase: m[1].trim(), team: m[2].trim() };
+}
+
+function getAtt7mTeam(action) {
+  const s = norm(action);
+  const m = s.match(/^att\s*7m\s+([^(]+)/i);
+  return m ? m[1].trim() : "";
+}
+
+function pickOffResult(e, isTousLesMatchs, team, offenseField) {
+  const rc = norm(e?.resultat_cthb);
+  const rl = norm(e?.resultat_limoges);
+  if (!isTousLesMatchs) return norm(e?.[offenseField] || "");
+  if (team && rc.includes(team)) return rc;
+  if (team && rl.includes(team)) return rl;
+  return norm(e?.[offenseField] || "");
+}
+
+function pickDefResult(e, isTousLesMatchs, team, defenseField) {
+  const rc = norm(e?.resultat_cthb);
+  const rl = norm(e?.resultat_limoges);
+  if (!isTousLesMatchs) return norm(e?.[defenseField] || "");
+  if (team && rc.includes(team)) return rl;
+  if (team && rl.includes(team)) return rc;
+  return norm(e?.[defenseField] || "");
+}
+
+function isShotNoSeven(resultat) {
+  if (!resultat) return false;
+  // on exclut les 7m : gérés à part
+  return resultat.startsWith("but ") || resultat.includes("tir ");
+}
+
+export default function TerrainHandball({
+  data,
+  teamName,
+  offenseField = "resultat_cthb",
+  defenseField = "resultat_limoges",
+}) {
   const { rapport } = useRapport();
-  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
+  const { equipeLocale, isTousLesMatchs } = useMatch();
 
   const statsBySecteur = useMemo(() => {
-    const map = {};
-    const equipe = norm(rapport === "offensif" ? equipeLocale : equipeAdverse);
+    const perMatch = {};
+    const add = (mid, secteurKey, isBut) => {
+      const k = String(mid);
+      if (!perMatch[k]) perMatch[k] = {};
+      if (!perMatch[k][secteurKey]) perMatch[k][secteurKey] = { tirs: 0, buts: 0 };
+      perMatch[k][secteurKey].tirs += 1;
+      if (isBut) perMatch[k][secteurKey].buts += 1;
+    };
 
-    if (isTousLesMatchs) {
-      // moyenne par match, AP uniquement, mais on laisse passer 7m
-      const parMatch = {};
+    const team = norm(teamName) || norm(equipeLocale);
 
-      (data || []).forEach((e) => {
-        const idMatch = e?.id_match;
-        const secteurKey = canonicalizeSecteur(e?.secteur);
-        if (!idMatch || !secteurKey) return;
+    (data || []).forEach((e) => {
+      const idMatch = e?.id_match;
+      const secteurKey = canonicalizeSecteur(e?.secteur);
+      if (!idMatch || !secteurKey) return;
 
-        const action = norm(e?.nom_action);
-        const isAP = action.startsWith("attaque ");
-        const isSeven = norm(secteurKey) === "7m";
-        if (!isAP && !isSeven) return; // ✅ exception 7m
+      const action = norm(e?.nom_action);
+      const { phase, team: phaseTeam } = getPhaseAndTeam(action);
+      const att7mTeam = getAtt7mTeam(action);
+      const poss = parsePossession(e?.possession);
 
-        const rc = norm(e?.resultat_cthb);
-        const rl = norm(e?.resultat_limoges);
-        const resultat = rapport === "offensif" ? (rc || rl) : (rl || rc);
+      const resultat =
+        rapport === "offensif"
+          ? pickOffResult(e, isTousLesMatchs, team, offenseField)
+          : pickDefResult(e, isTousLesMatchs, team, defenseField);
 
-        if (!parMatch[idMatch]) parMatch[idMatch] = {};
-        if (!parMatch[idMatch][secteurKey]) {
-          parMatch[idMatch][secteurKey] = { tirs: 0, buts: 0 };
+      // === 7m : exiger "att 7m <équipe>" + secteur "7M"
+      if (secteurKey === "7M") {
+        if (!att7mTeam || !team) return;
+        const okOff = rapport === "offensif" && att7mTeam === team;
+        const okDef = rapport === "defensif" && att7mTeam !== team;
+        if (okOff || okDef) {
+          const isBut = resultat.startsWith("but ");
+          add(idMatch, secteurKey, isBut);
         }
+        return;
+      }
 
-        parMatch[idMatch][secteurKey].tirs += 1;
-        if (resultat.includes("but")) parMatch[idMatch][secteurKey].buts += 1;
+      // === Phases acceptées : attaque|transition|mb|ca|er
+      let attacker = phaseTeam;
+      if (!attacker && poss?.equipe) attacker = poss.equipe;
+
+      let attackerMatches = false;
+      if (rapport === "offensif") {
+        attackerMatches = !!team && !!attacker && attacker === team;
+      } else {
+        attackerMatches = !!team && !!attacker && attacker !== team;
+      }
+
+      const allowed = new Set(["attaque", "transition", "mb", "ca", "er"]);
+      const phaseOk =
+        (phase && allowed.has(phase)) ||
+        (!phase && action.startsWith("attaque "));
+
+      if (!attackerMatches || !phaseOk) return;
+
+      if (!isShotNoSeven(resultat)) return;
+
+      const isBut = resultat.startsWith("but ");
+      add(idMatch, secteurKey, isBut);
+    });
+
+    // Agrégation / moyenne par match
+    const out = {};
+    const mids = Object.keys(perMatch);
+    const n = mids.length;
+    if (n === 0) return out;
+
+    mids.forEach((mid) => {
+      Object.entries(perMatch[mid]).forEach(([secteurKey, s]) => {
+        if (!out[secteurKey]) out[secteurKey] = { tirs: 0, buts: 0 };
+        out[secteurKey].tirs += s.tirs;
+        out[secteurKey].buts += s.buts;
       });
+    });
 
-      const matchIds = Object.keys(parMatch);
-      const matchCount = matchIds.length || 0;
-      if (matchCount === 0) return map;
+    Object.keys(out).forEach((k) => {
+      out[k].tirs = out[k].tirs / n;
+      out[k].buts = out[k].buts / n;
+    });
 
-      matchIds.forEach((mid) => {
-        const secteursMatch = parMatch[mid];
-        Object.entries(secteursMatch).forEach(([secteurKey, stats]) => {
-          if (!map[secteurKey]) map[secteurKey] = { tirs: 0, buts: 0 };
-          map[secteurKey].tirs += stats.tirs;
-          map[secteurKey].buts += stats.buts;
-        });
-      });
-
-      Object.keys(map).forEach((secteurKey) => {
-        map[secteurKey].tirs = map[secteurKey].tirs / matchCount;
-        map[secteurKey].buts = map[secteurKey].buts / matchCount;
-      });
-    } else {
-      // mono-match : borne équipe, AP uniquement, mais on laisse passer 7m
-      (data || []).forEach((e) => {
-        const secteurKey = canonicalizeSecteur(e?.secteur);
-        if (!secteurKey) return;
-
-        const action = norm(e?.nom_action);
-        const isAP = action.startsWith("attaque ");
-        const isSeven = norm(secteurKey) === "7m";
-        if (!isAP && !isSeven) return; // ✅ exception 7m
-
-        // borne équipe : on conserve la condition d'origine
-        if (equipe && !action.includes(equipe) && !isSeven) return;
-
-        const rc = norm(e?.resultat_cthb);
-        const rl = norm(e?.resultat_limoges);
-        let resultat = "";
-
-        if (rapport === "offensif") {
-          if (equipe && rc.includes(equipe)) resultat = rc;
-          else if (equipe && rl.includes(equipe)) resultat = rl;
-          else resultat = rc || rl;
-        } else {
-          if (equipe && rc.includes(equipe)) resultat = rl || rc; // côté adverse
-          else if (equipe && rl.includes(equipe)) resultat = rc || rl;
-          else resultat = rl || rc;
-        }
-
-        if (!map[secteurKey]) map[secteurKey] = { tirs: 0, buts: 0 };
-        map[secteurKey].tirs += 1;
-        if (resultat.includes("but")) map[secteurKey].buts += 1;
-      });
-    }
-
-    return map;
-  }, [data, rapport, isTousLesMatchs, equipeLocale, equipeAdverse]);
+    return out;
+  }, [data, rapport, isTousLesMatchs, equipeLocale, teamName, offenseField, defenseField]);
 
   const getColor = (eff) => {
     if (eff >= 75) return "bg-[#D4AF37]";
@@ -137,10 +182,10 @@ export default function TerrainHandball({ data }) {
       />
 
       {Object.entries(secteurs).map(([key, pos]) => {
-        const stats = statsBySecteur[key];
-        if (!stats || !stats.tirs) return null;
+        const s = statsBySecteur[key];
+        if (!s || !s.tirs) return null;
 
-        const eff = (stats.buts / stats.tirs) * 100;
+        const eff = (s.buts / s.tirs) * 100;
         const bg = getColor(eff);
 
         return (
@@ -154,12 +199,24 @@ export default function TerrainHandball({ data }) {
               minWidth: "72px",
             }}
           >
-            <div className="text-[11px] font-bold leading-tight mb-1">
-              {pos.label}
-            </div>
-            <div className="text-[16px] leading-tight">
-              {Math.round(stats.buts)}/{Math.round(stats.tirs)} - {eff.toFixed(0)}%
-            </div>
+            {/* Label : uniquement pour 7m (dans les deux modes) */}
+            {key === "7M" ? (
+              <div className="text-[11px] font-bold leading-tight mb-1">
+                {pos.label || "7m"}
+              </div>
+            ) : null}
+
+            {/* Affichage : 
+                - Tous les matchs (moyenne) => seulement le %
+                - Mono-match => "buts/tirs - %"
+            */}
+            {isTousLesMatchs ? (
+              <div className="text-[16px] leading-tight">{Math.round(eff)}%</div>
+            ) : (
+              <div className="text-[16px] leading-tight">
+                {Math.round(s.buts)}/{Math.round(s.tirs)} - {Math.round(eff)}%
+              </div>
+            )}
           </div>
         );
       })}

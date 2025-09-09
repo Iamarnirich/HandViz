@@ -45,11 +45,13 @@ function DashboardLayout() {
   const [joueuseId, setJoueuseId] = useState(null);
   const [gardienId, setGardienId] = useState(null); // ✅ nouvel état gardien
   const [matchId, setMatchIdLocal] = useState(null);
-  const [selectedTeam, setSelectedTeam] = useState(""); // ✅ sélecteur d'équipe
+  const [selectedTeam, setSelectedTeam] = useState("USDK"); // ✅ sélecteur d'équipe
   const { rapport, setRapport } = useRapport();
   const [loading, setLoading] = useState(true);
   const [showHistorique, setShowHistorique] = useState(false);
   const [jeLinks, setJeLinks] = useState([]);
+  const shouldHideDashboard = !selectedTeam && !matchId; // équipe vide + match = "all"
+
 
   const {
     setEquipeLocale,
@@ -77,7 +79,6 @@ function DashboardLayout() {
         .from("clubs")
         .select("id, nom, logo");
 
-      // ✅ on récupère aussi le poste
       const { data: joueusesData } = await supabase
         .from("joueuses")
         .select("id, nom, photo_url, equipe, poste");
@@ -98,7 +99,7 @@ function DashboardLayout() {
       setClubs(clubsMap);
       setJoueuses(joueusesData || []);
 
-      // reset du contexte "match" au chargement
+
       setEquipeLocale(null);
       setEquipeAdverse(null);
       setNomMatch(null);
@@ -109,7 +110,7 @@ function DashboardLayout() {
 
     fetchAll();
 
-    // ✅ écoute temps réel pour rafraîchir après import
+    
     const sub = supabase
       .channel("rt-matchs")
       .on(
@@ -130,9 +131,7 @@ function DashboardLayout() {
     setIsTousLesMatchs,
   ]);
 
-  /* ========= CORRECTIONS ICI ========= */
-
-  // ✅ matches filtrés par équipe sélectionnée (pour le sélecteur "match")
+  // Filtrage des matchs selon équipe sélectionnée
   const teamLower = (selectedTeam || "").toLowerCase().trim();
   const matchOptions = selectedTeam
     ? matchs.filter(
@@ -142,28 +141,30 @@ function DashboardLayout() {
       )
     : matchs;
 
-  // ✅ IDs des matchs où l'équipe sélectionnée a participé
+  
   const teamMatchIds = new Set(
     selectedTeam
       ? matchOptions.map((m) => m.id)
       : []
   );
 
-  // ✅ événements réellement affichés : par match si choisi, sinon par équipe si choisie
-  const filteredEvents = matchId
+  
+  const filteredEvents = shouldHideDashboard
+    ? []
+    : matchId
     ? evenements.filter((e) => e.id_match === matchId)
     : selectedTeam
     ? evenements.filter((e) => teamMatchIds.has(e.id_match))
     : evenements;
 
-  // ✅ nombre de matchs correspondant au jeu de données affiché (pour les moyennes)
-  const matchCountFiltered = matchId
+  
+  const matchCountFiltered = shouldHideDashboard
+    ? 0
+    : matchId
     ? 1
     : new Set(filteredEvents.map((e) => e.id_match)).size;
 
-  /* =================================== */
-
-  // ✅ liste d'équipes pour le sélecteur (clubs -> fallback matchs)
+  
   const teamOptionsSet = new Set(
     Object.values(clubs)
       .map((c) => c?.nom)
@@ -179,10 +180,10 @@ function DashboardLayout() {
     String(a).localeCompare(String(b), "fr")
   );
 
-  // ✅ match actuellement sélectionné
+  
   const selectedMatch = matchs.find((m) => m.id === matchId);
 
-  // ✅ logos/infos clubs
+  
   const clubLocal =
     (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
     (selectedMatch
@@ -194,7 +195,7 @@ function DashboardLayout() {
       ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.jpg" }
       : null);
 
-  // ✅ scores simples (calculés sur filteredEvents)
+  
   const getScore = (club, isLocale) => {
     if (!club) return 0;
     return filteredEvents.filter((e) => {
@@ -215,7 +216,7 @@ function DashboardLayout() {
   const scoreLocal = getScore(clubLocal, true);
   const scoreVisiteur = getScore(clubVisiteur, false);
 
-  // ✅ rapport individuel = uniquement joueurs USDK non GB
+  
   const isIndividuel = rapport === "individuel";
   const joueusesFiltered = matchId
     ? joueuses.filter((j) => {
@@ -237,7 +238,7 @@ function DashboardLayout() {
             (j.poste || "").toUpperCase() !== "GB"
       );
 
-  // ✅ rapport gardien = uniquement GB (si match: restreint aux 2 équipes du match)
+  
   const gardiensFiltered = matchId
     ? joueuses.filter((j) => {
         const inTeams =
@@ -254,7 +255,7 @@ function DashboardLayout() {
     (j) => String(j.id) === String(gardienId)
   );
 
-  // ✅ handlers
+  
   const handleTeamChange = (e) => {
     const val = e.target.value;
     setSelectedTeam(val);
@@ -288,20 +289,20 @@ function DashboardLayout() {
     }
   };
 
-  /* ➕➕ AJOUT MINIMAL : calcul des champs dynamiques pour l’équipe sélectionnée */
+  
   let offenseField = "resultat_cthb";
   let defenseField = "resultat_limoges";
   if (selectedTeam && selectedMatch) {
     const team = (selectedTeam || "").toLowerCase().trim();
     const home = (selectedMatch.equipe_locale || "").toLowerCase().trim();
     const away = (selectedMatch.equipe_visiteuse || "").toLowerCase().trim();
-    const isHome = team === home; // ✅ égalité stricte, plus fiable
+    const isHome = team === home; 
     // (optionnel) sécurité si l'équipe ne matche ni home ni away :
     // const isHome = team === home ? true : team === away ? false : true;
     offenseField = isHome ? "resultat_cthb" : "resultat_limoges";
     defenseField = isHome ? "resultat_limoges" : "resultat_cthb";
   }
-  /* ⬆️ Fin de l’ajout — rien d’autre ne change */
+  
 
   if (loading) {
     return (
@@ -321,7 +322,7 @@ function DashboardLayout() {
           onChange={handleTeamChange}
           className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">Toutes les équipes</option>
+          <option value="">Sélectionner une équipe</option>
           {teamOptions.map((nom) => (
             <option key={nom} value={nom}>
               {nom}
@@ -337,7 +338,7 @@ function DashboardLayout() {
           <option value="all">
             {selectedTeam
               ? "Tous les matchs de l’équipe sélectionnée"
-              : "Tous les matchs"}
+              : "Tous les matchs de l’équipe sélectionnée"}
           </option>
           {matchOptions.map((match) => (
             <option key={match.id} value={match.id}>
@@ -425,7 +426,7 @@ function DashboardLayout() {
         </button>
       </div>
 
-      {!showHistorique && (
+      {!shouldHideDashboard && !showHistorique && (
         <>
           {rapport === "offensif" && (
             <>
@@ -749,7 +750,7 @@ function DashboardLayout() {
         </>
       )}
 
-      {showHistorique && (
+      {!shouldHideDashboard && showHistorique && (
         <div className="w-full flex flex-col items-center justify-center space-y-12">
           <div className="w-full max-w-6xl">
             <ProgressionTirsChart 

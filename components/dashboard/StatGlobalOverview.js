@@ -309,7 +309,7 @@ export default function StatGlobalOverview({
         }
 
         // --- 2' SUBIES et 7m SUBIS (par l’adversaire)
-        if (sanction.startsWith("2' ") && sanction.includes("subies")) result.deuxMinSubies.total++;
+        if (opp ? action.startsWith("attaque " + opp) : action.startsWith("attaque ") && (sanction.startsWith("2' ") && sanction.includes("subies"))) result.deuxMinSubies.total++;
         if (opp ? resultat.startsWith("7m " + opp) : resultat.startsWith("7m ")) result.septMSubis.total++;
       });
 
