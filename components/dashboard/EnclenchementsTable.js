@@ -6,174 +6,168 @@ import { useMatch } from "@/contexts/MatchContext";
 
 export default function EnclenchementsTable({
   data,
-  teamName,          // pris en compte
-  offenseField,     
-  defenseField,      
+  teamName,
+  offenseField,
+  defenseField,
 }) {
   const { rapport } = useRapport();
   const { equipeLocale, isTousLesMatchs } = useMatch();
 
-  // helpers pour le mode "Tous les matchs"
-  const norm = (s) => (s || "").toLowerCase().trim();
+  // ---- utils
+  const norm = (s) => (s || "").toString().toLowerCase().trim();
+  const slug = (s) =>
+    norm(s)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""); // retire les accents
+
   const parsePossession = (txt) => {
     const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
     return m ? { teamA: m[1].trim(), teamB: m[2].trim() } : null;
   };
-  const inferTeamForMatch = (events, eqGuess = "") => {
-    //priorité à l'équipe sélectionnée si elle est fournie
-    if (eqGuess) return norm(eqGuess);
 
-    // sinon on déduit la plus fréquente dans "attaque" et "possession"
+  const inferTeamForMatch = (events, eqGuess = "") => {
+    if (eqGuess) return norm(eqGuess);
     const counts = new Map();
     const bump = (name) => {
       if (!name) return;
       const k = norm(name);
       counts.set(k, (counts.get(k) || 0) + 1);
     };
-
     const verbRx = /^attaque\s+([^\(]+)/i;
     events.forEach((e) => {
       const a = norm(e?.nom_action);
       const m = a.match(verbRx);
       if (m) bump(m[1]);
-
       const p = parsePossession(e?.possession);
       if (p) {
         bump(p.teamA);
         bump(p.teamB);
       }
     });
-
     const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
     return sorted[0]?.[0] || "";
   };
 
-  //Sélection dynamique du bon champ résultat par évènement (pour supporter équipe visiteuse)
-  const pickOffRes = (e, team) => {
+  // mono-match : on respecte les champs fournis par le parent
+  const pickOffResSingle = (e) => norm(e?.[offenseField]);
+  const pickDefResSingle = (e) => norm(e?.[defenseField]);
+
+  // tous-matchs : côté par évènement (selon team détectée)
+  const pickOffResMulti = (e, team) => {
     const rc = norm(e?.resultat_cthb);
     const rl = norm(e?.resultat_limoges);
-    if (team && rc.includes(team)) return rc; 
-    if (team && rl.includes(team)) return rl; 
-    return rc || rl || "";                    // fallback neutre
+    if (team && rc.includes(team)) return rc;
+    if (team && rl.includes(team)) return rl;
+    return rc || rl || "";
   };
-  const pickDefRes = (e, team) => {
+  const pickDefResMulti = (e, team) => {
     const rc = norm(e?.resultat_cthb);
     const rl = norm(e?.resultat_limoges);
-    if (team && rc.includes(team)) return rl; // on veut le côté adverse
-    if (team && rl.includes(team)) return rc; // on veut le côté adverse
-    return rl || rc || "";                    // fallback
+    if (team && rc.includes(team)) return rl;
+    if (team && rl.includes(team)) return rc;
+    return rl || rc || "";
+  };
+
+  // ---- FOCUS : tolérant aux variantes
+  const FOCUS = [
+    { keys: ["2vs2", "2v2"], label: "2vs2" },
+    { keys: ["duel", "1c1", "1vs1"], label: "Duel" },
+    { keys: ["bloc", "blocage", "pick"], label: "Bloc" },
+    { keys: ["ecran", "écran", "screen"], label: "Écran" },
+  ];
+  const matchAny = (txt, keys) => keys.some((k) => slug(txt).includes(k));
+
+  // ---- Succès (tolérant aux variantes orthographiques)
+  const isOffSuccess = (r, team) => {
+    if (!r) return false;
+    // but (évite "encaissé")
+    if ((team && r.startsWith(`but ${team}`)) || (!team && r.startsWith("but "))) {
+      if (!r.includes("encaiss")) return true;
+    }
+    // 7m / 7 m obtenu
+    if (
+      (team &&
+        (r.startsWith(`7m obtenu ${team}`) || r.startsWith(`7 m obtenu ${team}`))) ||
+      (!team && (r.startsWith("7m obtenu") || r.startsWith("7 m obtenu")))
+    ) {
+      return true;
+    }
+    // 2' obtenu(e)/provoqué(e)
+    if (r.includes("2'") && (r.includes("obten") || r.includes("provoc"))) return true;
+    return false;
+  };
+
+  const isDefSuccess = (r) => {
+    if (!r) return false;
+    // tir HC / hors-cadre
+    if (r.includes("tir hc") || r.includes("hors-cadre") || r.includes("hors cadre")) return true;
+    // tir arrêté / arret / arreté
+    if (r.includes("tir arrêt") || r.includes("tir arret") || r.includes("tir arreté")) return true;
+    // tir contré / contre
+    if (r.includes("tir contr")) return true; // capte contré/contre
+    // perte de balle
+    if (r.includes("perte de balle")) return true;
+    return false;
   };
 
   const lignes = useMemo(() => {
     if (rapport !== "offensif" && rapport !== "defensif") return [];
 
-    const typesFocus = ["2vs2", "duel", "bloc", "écran"];
+    // Masquer si "Tous les matchs" et pas d'équipe choisie
+    if (isTousLesMatchs && !norm(teamName || "")) return [];
 
-    //équipe de référence: priorité à teamName (sélecteur), sinon équipeLocale (ancienne logique)
     const equipeRef = norm(teamName || equipeLocale);
 
-    const estBonneEquipe = (evt) => {
-      if (isTousLesMatchs) return true; // en "Tous les matchs", on garde tout (moyennes par match)
-      const action = norm(evt.nom_action);
-      const resultatC = norm(evt.resultat_cthb);
-      const resultatL = norm(evt.resultat_limoges);
-      // on garde l’évènement si l’équipe apparaît soit dans l’action soit dans l’un des résultats
-      return (
-        (!!equipeRef &&
-          (action.includes(equipeRef) ||
-            resultatC.includes(equipeRef) ||
-            resultatL.includes(equipeRef))) ||
-        false
-      );
-    };
-
-    //Cas 1 : un seul match -> agrégation simple
+    // ===== MONO-MATCH =====
     if (!isTousLesMatchs) {
-      const parEnclenchement = new Map();
+      const parEncl = new Map();
+      const team = inferTeamForMatch(data, equipeRef);
 
-      const team = inferTeamForMatch(data, equipeRef); //si teamName est présent, on l’utilise
-
-      const isAPEventMono = (evt) => {
+      const isAPEvent = (evt) => {
         const a = norm(evt?.nom_action);
         if (!a.startsWith("attaque ")) return false;
         if (!team) return false;
-        // offensif: AP de l'équipe; défensif: AP de l'adversaire
         return rapport === "offensif"
           ? a.startsWith(`attaque ${team}`)
           : !a.startsWith(`attaque ${team}`);
       };
 
-      const estSuccesMonoMatch = (evt) => {
-        const rOff = pickOffRes(evt, team);
-        const rDef = pickDefRes(evt, team);
-
-        if (rapport === "offensif") {
-          return (
-            (team && rOff.startsWith(`but ${team}`)) ||
-            (team && rOff.startsWith(`7m obtenu ${team}`)) ||
-            rOff.includes("2' obtenu")
-          );
-        } else {
-          return (
-            rDef.includes("tir hc") ||
-            rDef.includes("tir arrêté") ||
-            rDef.includes("tir arret") ||
-            rDef.includes("perte de balle")
-          );
-        }
+      const successOf = (evt) => {
+        const rOff = pickOffResSingle(evt);
+        const rDef = pickDefResSingle(evt);
+        return rapport === "offensif" ? isOffSuccess(rOff, team) : isDefSuccess(rDef);
       };
 
-      data.forEach((evt) => {
-        if (!estBonneEquipe(evt)) return;
-        if (!isAPEventMono(evt)) return; 
-        const encl = (evt.enclenchement || "").trim();
+      (data || []).forEach((evt) => {
+        if (!isAPEvent(evt)) return;
+        const encl = (evt?.enclenchement || "").toString().trim();
         if (!encl) return;
-        if (!parEnclenchement.has(encl)) parEnclenchement.set(encl, []);
-        parEnclenchement.get(encl).push(evt);
+        if (!parEncl.has(encl)) parEncl.set(encl, []);
+        parEncl.get(encl).push(evt);
       });
 
-      const lignesCalculees = [];
-      for (const [encl, evenements] of parEnclenchement.entries()) {
-        const succesGlobal = evenements.filter(estSuccesMonoMatch).length;
-        const pourcentageReussite =
-          evenements.length > 0
-            ? ((succesGlobal / evenements.length) * 100).toFixed(1) + "%"
-            : "0%";
+      const rows = [];
+      for (const [encl, evts] of parEncl.entries()) {
+        const succ = evts.filter(successOf).length;
+        const denom = evts.length;
+        const pct = denom ? `${((succ / denom) * 100).toFixed(1)}%` : "0%";
+        const row = { enclenchement: encl, reussite: pct, usage: `${denom}` };
 
-        const ligne = {
-          enclenchement: encl,
-          reussite: pourcentageReussite,
-          usage: `${evenements.length}`, // nb d’AP
-        };
-
-        // sous-catégories (sur la base AP)
-        typesFocus.forEach((type) => {
-          const sousEnsemble = evenements.filter((evt) =>
-            norm(evt?.temps_fort).includes(type)
-          );
-          const denominateur = sousEnsemble.length;
-          const numerateur = sousEnsemble.filter(estSuccesMonoMatch).length;
-
-          ligne[type] =
-            denominateur > 0
-              ? `${((numerateur / denominateur) * 100).toFixed(1)}% (${denominateur})`
-              : "0% (0)";
+        FOCUS.forEach(({ keys, label }) => {
+          const sub = evts.filter((e) => matchAny(e?.temps_fort || "", keys));
+          const d = sub.length;
+          const n = sub.filter(successOf).length;
+          row[label] = d ? `${((n / d) * 100).toFixed(1)}% (${d})` : "0% (0)";
         });
 
-        lignesCalculees.push(ligne);
+        rows.push(row);
       }
 
-      lignesCalculees.sort((a, b) => {
-        const aCount = parseFloat(a.usage) || 0;
-        const bCount = parseFloat(b.usage) || 0;
-        return bCount - aCount;
-      });
-
-      return lignesCalculees;
+      rows.sort((a, b) => (parseFloat(b.usage) || 0) - (parseFloat(a.usage) || 0));
+      return rows;
     }
 
-    //Cas 2 : Tous les matchs -> moyenne par match
-    //Regrouper par match
+    // ===== TOUS LES MATCHS =====
     const byMatch = new Map();
     (data || []).forEach((evt) => {
       const id = evt?.id_match || "_unknown";
@@ -183,7 +177,6 @@ export default function EnclenchementsTable({
     const matchIds = Array.from(byMatch.keys());
     const nbMatches = matchIds.length || 1;
 
-    // on l'utilise pour accumuler 
     const acc = new Map();
     const ensure = (encl) => {
       if (!acc.has(encl)) {
@@ -191,12 +184,9 @@ export default function EnclenchementsTable({
           sumUsageAllMatches: 0,
           sumPctGlobal: 0,
           matchesCountForPct: 0,
-          focus: {
-            "2vs2": { sumPct: 0, matches: 0, sumDenom: 0 },
-            duel: { sumPct: 0, matches: 0, sumDenom: 0 },
-            bloc: { sumPct: 0, matches: 0, sumDenom: 0 },
-            écran: { sumPct: 0, matches: 0, sumDenom: 0 },
-          },
+          focus: Object.fromEntries(
+            FOCUS.map(({ keys }) => [keys[0], { sumPct: 0, matches: 0, sumDenom: 0 }])
+          ),
         });
       }
       return acc.get(encl);
@@ -204,116 +194,84 @@ export default function EnclenchementsTable({
 
     matchIds.forEach((mid) => {
       const events = byMatch.get(mid) || [];
+      const team = inferTeamForMatch(events, equipeRef);
+      if (!team) return;
 
-      // priorité à l’équipe sélectionnée; sinon déduction
-      const teamThisMatch = inferTeamForMatch(events, equipeRef);
-      if (!teamThisMatch) return;
-
-      const isAPEventWithTeam = (evt) => {
+      const isAPEvent = (evt) => {
         const a = norm(evt?.nom_action);
         if (!a.startsWith("attaque ")) return false;
         return rapport === "offensif"
-          ? a.startsWith(`attaque ${teamThisMatch}`)
-          : !a.startsWith(`attaque ${teamThisMatch}`);
+          ? a.startsWith(`attaque ${team}`)
+          : !a.startsWith(`attaque ${team}`);
       };
 
-      const estSuccesThisMatch = (evt) => {
-        const rOff = pickOffRes(evt, teamThisMatch);
-        const rDef = pickDefRes(evt, teamThisMatch);
-        if (rapport === "offensif") {
-          return (
-            rOff.startsWith(`but ${teamThisMatch}`) ||
-            rOff.startsWith(`7m obtenu ${teamThisMatch}`) ||
-            rOff.includes("2' obtenu")
-          );
-        } else {
-          return (
-            rDef.includes("tir hc") ||
-            rDef.includes("tir arrêté") ||
-            rDef.includes("tir arret") ||
-            rDef.includes("perte de balle")
-          );
-        }
+      const successOf = (evt) => {
+        const rOff = pickOffResMulti(evt, team);
+        const rDef = pickDefResMulti(evt, team);
+        return rapport === "offensif" ? isOffSuccess(rOff, team) : isDefSuccess(rDef);
       };
 
-      // regrouper par enclenchement (AP uniquement, selon le rapport)
-      const parEnclenchement = new Map();
+      const parEncl = new Map();
       events.forEach((evt) => {
-        if (!isAPEventWithTeam(evt)) return;
-        const encl = (evt.enclenchement || "").trim();
+        if (!isAPEvent(evt)) return;
+        const encl = (evt?.enclenchement || "").toString().trim();
         if (!encl) return;
-        if (!parEnclenchement.has(encl)) parEnclenchement.set(encl, []);
-        parEnclenchement.get(encl).push(evt);
+        if (!parEncl.has(encl)) parEncl.set(encl, []);
+        parEncl.get(encl).push(evt);
       });
 
-      for (const [encl, evts] of parEnclenchement.entries()) {
+      for (const [encl, evts] of parEncl.entries()) {
         const a = ensure(encl);
+        const usage = evts.length;
+        a.sumUsageAllMatches += usage;
 
-        // Utilisation = nb d’AP de cet enclenchement sur ce match
-        const usageThisMatch = evts.length;
-        a.sumUsageAllMatches += usageThisMatch;
-
-        // % réussite (sur ce match)
-        const succes = evts.filter(estSuccesThisMatch).length;
-        if (usageThisMatch > 0) {
-          const pct = (succes / usageThisMatch) * 100;
-          a.sumPctGlobal += pct;
+        const succ = evts.filter(successOf).length;
+        if (usage > 0) {
+          a.sumPctGlobal += (succ / usage) * 100;
           a.matchesCountForPct += 1;
         }
 
-        // focus : 2vs2 / duel / bloc / écran (sur AP)
-        typesFocus.forEach((type) => {
-          const sub = evts.filter((e) => norm(e?.temps_fort).includes(type));
+        FOCUS.forEach(({ keys }) => {
+          const sub = evts.filter((e) => matchAny(e?.temps_fort || "", keys));
           const denom = sub.length;
           if (denom > 0) {
-            const num = sub.filter(estSuccesThisMatch).length;
-            const pct = (num / denom) * 100;
-            a.focus[type].sumPct += pct;
-            a.focus[type].matches += 1;
-            a.focus[type].sumDenom += denom;
+            const num = sub.filter(successOf).length;
+            const k = keys[0]; // clé d’accumulation
+            a.focus[k].sumPct += (num / denom) * 100;
+            a.focus[k].matches += 1;
+            a.focus[k].sumDenom += denom;
           }
         });
       }
     });
 
-    
-    const lignesCalculees = [];
+    const rows = [];
     for (const [encl, a] of acc.entries()) {
-      const usageMoy = a.sumUsageAllMatches / nbMatches; // moyenne d’utilisation par match
-      const pctMoy =
-        a.matchesCountForPct > 0 ? a.sumPctGlobal / a.matchesCountForPct : 0;
-
-      const ligne = {
+      const usageMoy = a.sumUsageAllMatches / nbMatches;
+      const pctMoy = a.matchesCountForPct ? a.sumPctGlobal / a.matchesCountForPct : 0;
+      const row = {
         enclenchement: encl,
         reussite: `${pctMoy.toFixed(1)}%`,
         usage: `${usageMoy.toFixed(1)}`,
       };
-
-      const labelsFocus = ["2vs2", "duel", "bloc", "écran"];
-      labelsFocus.forEach((label) => {
-        const f = a.focus[label];
-        const pct = f.matches > 0 ? f.sumPct / f.matches : 0;
-        const denomMoy = f.matches > 0 ? f.sumDenom / f.matches : 0;
-        ligne[label] = `${pct.toFixed(1)}% (${denomMoy.toFixed(1)})`;
+      FOCUS.forEach(({ keys, label }) => {
+        const f = a.focus[keys[0]];
+        const pct = f.matches ? f.sumPct / f.matches : 0;
+        const denomMoy = f.matches ? f.sumDenom / f.matches : 0;
+        row[label] = `${pct.toFixed(1)}% (${denomMoy.toFixed(1)})`;
       });
-
-      lignesCalculees.push(ligne);
+      rows.push(row);
     }
 
-    // tri par utilisation moyenne
-    lignesCalculees.sort((x, y) => {
-      const ax = parseFloat(x.usage) || 0;
-      const ay = parseFloat(y.usage) || 0;
-      return ay - ax;
-    });
+    rows.sort((x, y) => (parseFloat(y.usage) || 0) - (parseFloat(x.usage) || 0));
+    return rows;
+  }, [data, rapport, teamName, equipeLocale, isTousLesMatchs, offenseField, defenseField]);
 
-    return lignesCalculees;
-  }, [data, rapport, teamName, equipeLocale, isTousLesMatchs]); //dépend aussi de teamName
-
-  if ((rapport !== "offensif" && rapport !== "defensif") || lignes.length === 0)
+  if ((rapport !== "offensif" && rapport !== "defensif") || lignes.length === 0) {
     return null;
+  }
 
-  const labelsFocus = ["2vs2", "duel", "bloc", "écran"];
+  const headerFocusLabels = ["2vs2", "Duel", "Bloc", "Écran"];
 
   return (
     <div className="w-full max-w-6xl mx-auto">
@@ -324,11 +282,8 @@ export default function EnclenchementsTable({
               <th className="px-2 py-2 text-left font-medium">Enclenchement</th>
               <th className="px-2 py-2 text-center font-medium">% Réussite</th>
               <th className="px-2 py-2 text-center font-medium">Utilisation</th>
-              {labelsFocus.map((label) => (
-                <th
-                  key={label}
-                  className="px-2 py-2 text-center font-medium whitespace-nowrap"
-                >
+              {headerFocusLabels.map((label) => (
+                <th key={label} className="px-2 py-2 text-center font-medium whitespace-nowrap">
                   % Efficacité {label}
                 </th>
               ))}
@@ -342,7 +297,7 @@ export default function EnclenchementsTable({
                 </td>
                 <td className="px-2 py-2 text-center">{row.reussite}</td>
                 <td className="px-2 py-2 text-center">{row.usage}</td>
-                {labelsFocus.map((label) => (
+                {headerFocusLabels.map((label) => (
                   <td key={label} className="px-2 py-2 text-center">
                     {row[label]}
                   </td>

@@ -309,7 +309,7 @@ export default function StatGlobalOverview({
         }
 
         // --- 2' SUBIES et 7m SUBIS (par l’adversaire)
-        if (opp ? action.startsWith("attaque " + opp) : action.startsWith("attaque ") && (sanction.startsWith("2' ") && sanction.includes("subies"))) result.deuxMinSubies.total++;
+        if ((isAP|| phaseKeys.ca || phaseKeys.er || phaseKeys.mb || phaseKeys.jt) && (sanction.startsWith("2' "))) result.deuxMinSubies.total++;
         if (opp ? resultat.startsWith("7m " + opp) : resultat.startsWith("7m ")) result.septMSubis.total++;
       });
 
@@ -401,7 +401,7 @@ export default function StatGlobalOverview({
 
         if (resultat.includes(team) && resultat.includes("neutralisée")) { resultOff.neutralisations.total++; if (isAP) neutralAP++; }
 
-        if (action.startsWith("attaque " + team) && sanction.startsWith("2' ") && sanction.includes("provoc")) resultOff.deuxMinutes.total++;
+        if ((action.startsWith("attaque " + team)|| action.startsWith("ca " + team)||action.startsWith("er " + team)|| action.startsWith("mb " + team)|| action.startsWith("transition " + team)) && sanction.startsWith("2'")) resultOff.deuxMinutes.total++;
         if (resultat.startsWith("7m obtenu " + team)) resultOff.jets7m.total++;
       }
     });
