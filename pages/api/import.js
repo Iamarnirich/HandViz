@@ -22,27 +22,84 @@ const looksLikeUSDK = (s = "") => {
   return n === "usdk" || n.startsWith("usdk ");
 };
 
-// Parse des dates CSV tolérant plusieurs formats → Date ISO (UTC minuit)
+/**
+ * Convertit une valeur "Date" provenant du CSV/Excel en Date JS (UTC minuit) robuste.
+ * Gère :
+ *  - ISO natif
+ *  - DD/MM/YYYY (+ option HH:mm)
+ *  - DD-MM-YYYY (+ option HH:mm)
+ *  - Numéro de série Excel (systèmes 1900 et 1904)
+ */
 function parseCsvDate(raw) {
-  if (!raw) return null;
+  if (raw == null) return null;
+
+  // Si c'est déjà un nombre => possible numéro de série Excel
+  if (typeof raw === "number" && isFinite(raw)) {
+    return excelSerialToUTC(raw);
+  }
+
   const s = String(raw).trim();
 
-  // ISO direct
-  const iso = new Date(s);
-  if (!isNaN(iso.valueOf())) return iso;
+  // Numéro de série Excel sous forme de texte
+  if (/^\d{4,6}$/.test(s)) {
+    const n = Number(s);
+    if (isFinite(n)) return excelSerialToUTC(n);
+  }
 
-  // DD/MM/YYYY
-  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  // ISO natif (Date sait le lire)
+  const iso = new Date(s);
+  if (!isNaN(iso.valueOf())) {
+    const d = toUTCDateAtMidnight(iso);
+    return d;
+  }
+
+  // DD/MM/YYYY [HH:mm]
+  let m = s.match(/^(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (!m) {
+    // DD-MM-YYYY [HH:mm]
+    m = s.match(/^(\d{1,2})[\-](\d{1,2})[\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  }
   if (m) {
-    const d = parseInt(m[1], 10);
-    const mo = parseInt(m[2], 10) - 1;
-    const y =
-      m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
-    const dt = new Date(Date.UTC(y, mo, d, 0, 0, 0));
-    return isNaN(dt.valueOf()) ? null : dt;
+    const day = parseInt(m[1], 10);
+    const mon = parseInt(m[2], 10) - 1;
+    const yr = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+    const hh = m[4] ? parseInt(m[4], 10) : 0;
+    const mm = m[5] ? parseInt(m[5], 10) : 0;
+    const dt = new Date(Date.UTC(yr, mon, day, 0, 0, 0));
+    if (!isNaN(dt.valueOf())) return dt;
   }
 
   return null; // non reconnu
+}
+
+/** Excel serial -> Date UTC minuit (robuste 1900/1904) */
+function excelSerialToUTC(serial) {
+  // Excel 1900 base : 25569 = 1970-01-01
+  // Excel 1904 base : 24107 = 1970-01-01
+  // On essaie d’inférer : si serial > 60000, on est sûrement en 1900 system (dates modernes)
+  const base1900 = 25569;
+  const base1904 = 24107;
+
+  // Si serial < 10000 on tente 1904, sinon 1900
+  const base = serial < 10000 ? base1904 : base1900;
+
+  const ms = (serial - base) * 86400 * 1000;
+  const d = new Date(ms);
+  if (isNaN(d.valueOf())) return null;
+  return toUTCDateAtMidnight(d);
+}
+
+/** Remet l'heure à 00:00:00 UTC */
+function toUTCDateAtMidnight(d) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+}
+
+/** Clamp raisonnable pour éviter les années aberrantes qui font planter Postgres */
+function clampDateReasonable(d) {
+  if (!d) return null;
+  const y = d.getUTCFullYear();
+  if (y < 1950 || y > 2100) return null;
+  return d;
 }
 
 function convertirTemps(val) {
@@ -51,18 +108,15 @@ function convertirTemps(val) {
   const parts = str.split(":").map((x) => Number(x));
   let h = 0, m = 0, s = 0;
   if (parts.length === 2) {
-    m = parts[0];
-    s = parts[1];
+    m = parts[0]; s = parts[1];
   } else if (parts.length === 3) {
-    h = parts[0];
-    m = parts[1];
-    s = parts[2];
+    h = parts[0]; m = parts[1]; s = parts[2];
   }
-  // Correction des dépassements
+  // Normalisation des dépassements
   h += Math.floor(m / 60);
   m = m % 60;
   h += Math.floor(s / 3600);
-  m += Math.floor(s / 60);
+  m += Math.floor((s % 3600) / 60);
   s = s % 60;
   if (m >= 60) {
     h += Math.floor(m / 60);
@@ -102,31 +156,31 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
   );
 
   return {
-    nom_action: String(row["Nom"] || "").trim(),
+    nom_action: String(row["Nom"] || row["nom"] || "").trim(),
     resultat_cthb: col_cthb ? String(row[col_cthb] || "").trim() : "",
     resultat_limoges: col_adv ? String(row[col_adv] || "").trim() : "",
-    temps_de_jeu: String(row["Temps de jeu"] || "").trim(),
-    secteur: String(row["Secteur"] || "").trim(),
-    possession: String(row["Possession"] || "").trim(),
-    enclenchement: String(row["Enclenchement"] || "").trim(),
-    dispositif_cthb: String(row["Dispositif USDK"] || "").trim(),
-    nombre: String(row["Nombre"] || "").trim(),
+    temps_de_jeu: String(row["Temps de jeu"] || row["temps_de_jeu"] || "").trim(),
+    secteur: String(row["Secteur"] || row["secteur"] || "").trim(),
+    possession: String(row["Possession"] || row["possession"] || "").trim(),
+    enclenchement: String(row["Enclenchement"] || row["enclenchement"] || "").trim(),
+    dispositif_cthb: String(row["Dispositif USDK"] || row["dispositif_cthb"] || "").trim(),
+    nombre: String(row["Nombre"] || row["nombre"] || "").trim(),
     // <- la date du match vient du CSV : on la remonte pour usage plus haut
-    date_match: String(row["Date"] || "").trim(),
-    impact: String(row["Impacts"] || "").trim(),
-    phase_rec: String(row["Phases REC"] || "").trim(),
-    phase_vis: String(row["Phases VIS"] || "").trim(),
-    position: String(row["Position"] || "").trim(),
-    duree: String(row["Durée"] || "").trim(),
-    mi_temps: String(row["Mi-temps"] || "").trim(),
-    competition: String(row["Compétition"] || "").trim(),
-    temps_fort: String(row["Temps Fort"] || "").trim(),
-    sanctions: String(row["Sanctions"] || "").trim(),
+    date_match: row["Date"] ?? row["date_match"] ?? row["date"] ?? "",
+    impact: String(row["Impacts"] || row["impact"] || "").trim(),
+    phase_rec: String(row["Phases REC"] || row["phase_rec"] || "").trim(),
+    phase_vis: String(row["Phases VIS"] || row["phase_vis"] || "").trim(),
+    position: String(row["Position"] || row["position"] || "").trim(),
+    duree: String(row["Durée"] || row["duree"] || "").trim(),
+    mi_temps: String(row["Mi-temps"] || row["mi_temps"] || "").trim(),
+    competition: String(row["Compétition"] || row["competition"] || "").trim(),
+    temps_fort: String(row["Temps Fort"] || row["temps_fort"] || "").trim(),
+    sanctions: String(row["Sanctions"] || row["sanctions"] || "").trim(),
     gb_cthb: col_gb_cthb ? String(row[col_gb_cthb] || "").trim() : "",
     gb_adv: col_gb_adv ? String(row[col_gb_adv] || "").trim() : "",
     nom_joueuse_cthb: col_j_cthb ? String(row[col_j_cthb] || "").trim() : "",
     nom_joueuse_adv: col_j_adv ? String(row[col_j_adv] || "").trim() : "",
-    poste: String(row["Poste"] || "").trim(),
+    poste: String(row["Poste"] || row["poste"] || "").trim(),
   };
 }
 
@@ -205,7 +259,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Données invalides reçues." });
     }
 
-    const rawMatch = rows[0]?.["Match"];
+    const rawMatch = rows[0]?.["Match"] || rows[0]?.["match"];
     if (!rawMatch || !rawMatch.includes(";")) {
       return res.status(400).json({
         error: "Impossible de déterminer les équipes depuis la colonne Match.",
@@ -232,8 +286,11 @@ export default async function handler(req, res) {
 
     // Date issue du CSV (on prend la première non vide)
     const firstRow = normaliserRow(rows[0], equipe_locale, equipe_visiteuse);
-    const parsedDate = parseCsvDate(firstRow.date_match);
-    const date_match = parsedDate || new Date(); // fallback si CSV vide
+    let parsedDate = parseCsvDate(firstRow.date_match);
+    parsedDate = clampDateReasonable(parsedDate) || toUTCDateAtMidnight(new Date());
+
+    // ISO propre (UTC minuit)
+    const date_match_iso = parsedDate.toISOString();
 
     // Recherche du match : 1) par nom  2) par date du jour + équipes
     let match_id = null;
@@ -256,16 +313,11 @@ export default async function handler(req, res) {
     // 2) par date du jour + équipes (si pas trouvé par nom)
     if (!match_id) {
       // fenêtre [minuit, minuit+1j] pour comparer une "date" sans l'heure
-      const start = new Date(
-        Date.UTC(
-          date_match.getUTCFullYear(),
-          date_match.getUTCMonth(),
-          date_match.getUTCDate(),
-          0,
-          0,
-          0
-        )
-      );
+      const start = new Date(Date.UTC(
+        parsedDate.getUTCFullYear(),
+        parsedDate.getUTCMonth(),
+        parsedDate.getUTCDate(), 0, 0, 0
+      ));
       const end = new Date(start.getTime() + 24 * 3600 * 1000);
 
       const { data: byDay } = await supabase
@@ -290,7 +342,7 @@ export default async function handler(req, res) {
           nom_match: matchNom,
           equipe_locale,
           equipe_visiteuse,
-          date_match, // <-- on place la date du CSV ici
+          date_match: date_match_iso, // <-- ISO propre
         })
         .select()
         .single();
@@ -307,7 +359,7 @@ export default async function handler(req, res) {
       // mettre à jour les libellés (et la date si changée)
       const { error: updErr } = await supabase
         .from("matchs")
-        .update({ equipe_locale, equipe_visiteuse, date_match })
+        .update({ equipe_locale, equipe_visiteuse, date_match: date_match_iso })
         .eq("id", match_id);
 
       if (updErr) {
@@ -317,7 +369,6 @@ export default async function handler(req, res) {
       }
 
       // Option A (remplacement) : supprimer les événements existants du match
-      // Si FK cascade existe: ce DELETE suffit
       const { error: delEvtErr } = await supabase
         .from("evenements")
         .delete()
@@ -355,7 +406,7 @@ export default async function handler(req, res) {
           nom_action: row.nom_action,
           resultat_cthb: row.resultat_cthb,
           resultat_limoges: row.resultat_limoges,
-          temps_de_jeu,
+          temps_de_jeu, // stocke en TEXT ou TIME SANS fuseau, surtout pas TIMESTAMPTZ
           secteur: row.secteur,
           possession: row.possession,
           enclenchement: row.enclenchement,
@@ -365,9 +416,8 @@ export default async function handler(req, res) {
           phase_rec: row.phase_rec,
           phase_vis: row.phase_vis,
           match_nom: matchNom,
-          // ⚠️ NE PAS mettre date_match ici (sauf si ta table evenements a cette colonne)
           position: row.position,
-          duree,
+          duree,       // idem
           mi_temps: row.mi_temps,
           competition: row.competition,
           temps_fort: row.temps_fort,

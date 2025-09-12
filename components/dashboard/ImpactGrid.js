@@ -27,7 +27,7 @@ function parsePossession(txt) {
 
 function getPhaseAndTeam(action) {
   const s = norm(action);
-  const m = s.match(/^(attaque|transition|mb|ca|er)\s+([^(]+)/i);
+  const m = s.match(/^(attaque|att 7m|transition|mb|ca|er)\s+([^(]+)/i);
   if (!m) return { phase: "", team: "" };
   return { phase: m[1].trim(), team: m[2].trim() };
 }
@@ -52,8 +52,6 @@ function pickDefResult(e, isTousLesMatchs, selTeam, defenseField) {
 
 function isShot(resultat) {
   if (!resultat) return false;
-  // on prend buts et tous les "tir ..." ; on exclut les 7m ici
-  if (resultat.includes("7m")) return false;
   return resultat.startsWith("but ") || resultat.includes("tir ");
 }
 
@@ -77,7 +75,7 @@ export default function ImpactGrid({
     };
 
     const selTeam = norm(teamName) || norm(equipeLocale);
-    const allowedPhases = new Set(["attaque", "transition", "mb", "ca", "er"]);
+    const allowedPhases = new Set(["attaque","att 7m", "transition", "mb", "ca", "er"]);
 
     (data || []).forEach((e) => {
       const idMatch = e?.id_match;
