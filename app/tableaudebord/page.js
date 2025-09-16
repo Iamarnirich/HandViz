@@ -66,7 +66,7 @@ function DashboardLayout() {
       const { data: matchsData } = await supabase
         .from("matchs")
         .select(
-          "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match"
+          "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match,journee"
         )
         .order("date_match", { ascending: false });
 
@@ -351,7 +351,7 @@ function DashboardLayout() {
       {matchId && clubLocal && clubVisiteur && (
         <div className="mt-4 w-fit mx-auto flex flex-col items-center gap-1">
           <p className="text-sm font-semibold text-gray-600">
-            J1 -{selectedMatch.date_match}
+            {selectedMatch.journee}-{selectedMatch.date_match}
           </p>
           <div className="flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1]">
             <div className="flex items-center gap-3">
