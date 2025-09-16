@@ -48,6 +48,25 @@ export default function EnclenchementsTable({
     return sorted[0]?.[0] || "";
   };
 
+  // ✅ NOUVEAU : déduire le nom de l’adversaire sur un match
+  const inferOpponentForMatch = (events, team) => {
+    const cnt = new Map();
+    const bump = (name) => {
+      if (!name) return;
+      const k = norm(name);
+      if (k && k !== team) cnt.set(k, (cnt.get(k) || 0) + 1);
+    };
+    (events || []).forEach((e) => {
+      const p = parsePossession(e?.possession);
+      if (p) {
+        if (p.teamA === team) bump(p.teamB);
+        else if (p.teamB === team) bump(p.teamA);
+      }
+    });
+    const arr = Array.from(cnt.entries()).sort((a, b) => b[1] - a[1]);
+    return arr[0]?.[0] || "";
+  };
+
   // mono-match : on respecte les champs fournis par le parent
   const pickOffResSingle = (e) => norm(e?.[offenseField]);
   const pickDefResSingle = (e) => norm(e?.[defenseField]);
@@ -63,7 +82,7 @@ export default function EnclenchementsTable({
   const pickDefResMulti = (e, team) => {
     const rc = norm(e?.resultat_cthb);
     const rl = norm(e?.resultat_limoges);
-    if (team && rc.includes(team)) return rl;
+    if (team && rc.includes(team)) return rl; // côté opposé
     if (team && rl.includes(team)) return rc;
     return rl || rc || "";
   };
@@ -77,7 +96,7 @@ export default function EnclenchementsTable({
   ];
   const matchAny = (txt, keys) => keys.some((k) => slug(txt).includes(k));
 
-  // ---- Succès (tolérant aux variantes orthographiques)
+  // ---- Règle de succès OFFENSIF (inchangée)
   const isOffSuccess = (r, team) => {
     if (!r) return false;
     // but (évite "encaissé")
@@ -97,19 +116,6 @@ export default function EnclenchementsTable({
     return false;
   };
 
-  const isDefSuccess = (r) => {
-    if (!r) return false;
-    // tir HC / hors-cadre
-    if (r.includes("tir hc") || r.includes("hors-cadre") || r.includes("hors cadre")) return true;
-    // tir arrêté / arret / arreté
-    if (r.includes("tir arrêt") || r.includes("tir arret") || r.includes("tir arreté")) return true;
-    // tir contré / contre
-    if (r.includes("tir contr")) return true; // capte contré/contre
-    // perte de balle
-    if (r.includes("perte de balle")) return true;
-    return false;
-  };
-
   const lignes = useMemo(() => {
     if (rapport !== "offensif" && rapport !== "defensif") return [];
 
@@ -122,6 +128,7 @@ export default function EnclenchementsTable({
     if (!isTousLesMatchs) {
       const parEncl = new Map();
       const team = inferTeamForMatch(data, equipeRef);
+      const opp = inferOpponentForMatch(data, team);
 
       const isAPEvent = (evt) => {
         const a = norm(evt?.nom_action);
@@ -129,13 +136,18 @@ export default function EnclenchementsTable({
         if (!team) return false;
         return rapport === "offensif"
           ? a.startsWith(`attaque ${team}`)
-          : !a.startsWith(`attaque ${team}`);
+          : a.startsWith(`attaque ${opp}`); // ✅ l’adversaire attaque en défensif
       };
 
+      // ✅ Offensif : succès de notre équipe
+      // ✅ Défensif : succès de l’ADVERSAIRE (même règle), PAS d’inversion
       const successOf = (evt) => {
-        const rOff = pickOffResSingle(evt);
-        const rDef = pickDefResSingle(evt);
-        return rapport === "offensif" ? isOffSuccess(rOff, team) : isDefSuccess(rDef);
+        if (rapport === "offensif") {
+          const rOff = pickOffResSingle(evt);
+          return isOffSuccess(rOff, team);
+        }
+        const rOpp = pickDefResSingle(evt);     // champ résultat de l’adversaire (passé par le parent)
+        return isOffSuccess(rOpp, opp);         // même règle, mais avec le nom de l’adversaire
       };
 
       (data || []).forEach((evt) => {
@@ -196,19 +208,23 @@ export default function EnclenchementsTable({
       const events = byMatch.get(mid) || [];
       const team = inferTeamForMatch(events, equipeRef);
       if (!team) return;
+      const opp = inferOpponentForMatch(events, team);
 
       const isAPEvent = (evt) => {
         const a = norm(evt?.nom_action);
         if (!a.startsWith("attaque ")) return false;
         return rapport === "offensif"
           ? a.startsWith(`attaque ${team}`)
-          : !a.startsWith(`attaque ${team}`);
+          : a.startsWith(`attaque ${opp}`); // ✅ attaque adverse
       };
 
       const successOf = (evt) => {
-        const rOff = pickOffResMulti(evt, team);
-        const rDef = pickDefResMulti(evt, team);
-        return rapport === "offensif" ? isOffSuccess(rOff, team) : isDefSuccess(rDef);
+        if (rapport === "offensif") {
+          const rOff = pickOffResMulti(evt, team);
+          return isOffSuccess(rOff, team);
+        }
+        const rOpp = pickDefResMulti(evt, team); // ✅ côté opposé au nôtre
+        return isOffSuccess(rOpp, opp);          // ✅ même règle appliquée à l’adversaire
       };
 
       const parEncl = new Map();
