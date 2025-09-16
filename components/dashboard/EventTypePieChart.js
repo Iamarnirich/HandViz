@@ -7,7 +7,7 @@ import { useMatch } from "@/contexts/MatchContext";
 
 const COLORS = ["#D4AF37", "#1a1a1a"];
 
-// normalisation sans accents + minuscule
+// -------- utils de normalisation --------
 const norm = (s) =>
   (s || "")
     .toString()
@@ -16,88 +16,63 @@ const norm = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-// helpers de classification (défense)
-const isGoal = (res, adv) => {
-  if (adv) return res.startsWith(`but ${adv}`);
-  return res.startsWith("but ");
-};
-
-const isSave = (res, adv) => {
-  const saveLike =
-    res.includes("tir arrêté ") ||
-    res.includes("tir arrete") ||
-    res.includes("tir arret ") ||
-    res.includes("tir arret") ||
-    res.includes("tir arrete") ||
-    res.includes("tir arrete") ||
-    res.includes("tir contre ") ||
-    res.includes("tir contre");
-  if (adv) return saveLike && res.includes(` ${adv}`);
-  return saveLike;
-};
-
-const isMiss = (res, adv) => {
-  const missLike = res.includes("tir hc");
-  if (adv) return missLike && res.includes(` ${adv}`);
-  return missLike;
-};
-
-/* 🔑 Ajouts minimaux: inférence équipe + sélection du bon "côté" résultat */
-function parsePossession(txt) {
+const parsePossession = (txt) => {
   const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
   return m ? { a: m[1].trim(), b: m[2].trim() } : null;
-}
+};
 
-function inferTeamForMatch(events, hintTeam = "") {
-  // si on a un hint (potentiellement l'équipe locale), on le prend
-  if (hintTeam) return norm(hintTeam);
+// résultat "adverse" par évènement (cthb vs limoges) basé sur teamName
+const pickOppResult = (e, team) => {
+  const rc = norm(e?.resultat_cthb);
+  const rl = norm(e?.resultat_limoges);
+  if (team && rc.includes(team)) return rl; // si CTHB = nous, l'adverse = LIMOGES
+  if (team && rl.includes(team)) return rc; // si LIMOGES = nous, l'adverse = CTHB
+  return rl || rc || "";
+};
 
+// classification stricte (uniquement si le résultat mentionne explicitement l'adversaire)
+const isGoal  = (r, adv) => adv ? r.startsWith(`but ${adv}`) : false;
+const isSave  = (r, adv) =>
+  adv ? (/(tir\s+arr[eé]t[ée]?|tir\s+arret|tir\s+contr[ée]?)/.test(r) && r.includes(` ${adv}`)) : false;
+const isMiss  = (r, adv) =>
+  adv ? (/(tir\s+hc|hors[-\s]?cadre)/.test(r) && r.includes(` ${adv}`)) : false;
+
+// déduire l'adversaire par match en multi quand on a teamName (via possession)
+const inferOppFromPossessions = (events, team) => {
   const counts = new Map();
-  const bump = (n) => {
-    if (!n) return;
-    const k = norm(n);
-    counts.set(k, (counts.get(k) || 0) + 1);
-  };
-
-  const rxAtk = /^attaque\s+([^\(]+)/i;
-  const rxRes = /^(but|tir|perte|7m|2'|exclusion)\s+([^\s]+)/i;
+  const bump = (n) => { if (!n || n === team) return; const k = norm(n); counts.set(k, (counts.get(k) || 0) + 1); };
 
   (events || []).forEach((e) => {
-    const a = norm(e?.nom_action);
-    const mA = a.match(rxAtk);
-    if (mA) bump(mA[1]);
-
     const p = parsePossession(e?.possession);
-    if (p) {
-      bump(p.a);
-      bump(p.b);
-    }
-
-    const r1 = norm(e?.resultat_cthb);
-    const r2 = norm(e?.resultat_limoges);
-    const m1 = r1.match(rxRes);
-    const m2 = r2.match(rxRes);
-    if (m1) bump(m1[2]);
-    if (m2) bump(m2[2]);
+    if (!p) return;
+    if (p.a === team) bump(p.b);
+    if (p.b === team) bump(p.a);
   });
 
-  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  return sorted[0]?.[0] || "";
-}
+  let best = "", max = 0;
+  for (const [name, cnt] of counts.entries()) {
+    if (cnt > max) { max = cnt; best = name; }
+  }
+  return best;
+};
 
-export default function EventTypePieChart({ data }) {
+export default function EventTypePieChart({
+  data,
+  matchCount = 0,
+  teamName = "",
+  offenseField,
+  defenseField,
+}) {
   const { rapport } = useRapport();
-  const { equipeAdverse, equipeLocale, isTousLesMatchs } = useMatch();
+  const { isTousLesMatchs, equipeAdverse, equipeLocale } = useMatch();
 
   const charts = useMemo(() => {
     if (rapport !== "defensif" && rapport !== "gardien") return null;
 
-    let goals = 0;
-    let saves = 0;
-    let missed = 0;
+    const team = norm(teamName || equipeLocale || "");
+    if (!team) return null;
 
-    // Regrouper par match pour pouvoir décider, par match/évènement,
-    // quel côté résultat (cthb vs limoges) représente l’ADVERSAIRE de l’équipe analysée.
+    // regrouper par id_match
     const byMatch = new Map();
     (data || []).forEach((e) => {
       const id = e?.id_match ?? "_unknown";
@@ -105,68 +80,59 @@ export default function EventTypePieChart({ data }) {
       byMatch.get(id).push(e);
     });
 
-    for (const [, events] of byMatch.entries()) {
-      // équipe de référence pour CE match:
-      // - en multi-match: on l’infère
-      // - en mono-match: on peut donner un hint via equipeLocale (si présent)
-      const team = inferTeamForMatch(events, isTousLesMatchs ? "" : equipeLocale);
+    let goals = 0, saves = 0, missed = 0;
 
-      // adversaire sélectionné explicite (mono-match) — utilisé seulement pour le filtre "strict"
-      const adv = isTousLesMatchs ? null : norm(equipeAdverse);
+    for (const [, events] of byMatch.entries()) {
+      let opp = "";
+
+      if (!isTousLesMatchs && matchCount === 1) {
+        // ✅ MONO-MATCH : l’adversaire dépend de l’équipe sélectionnée
+        const el = norm(equipeLocale || "");
+        const ea = norm(equipeAdverse || "");
+        if (team && el && ea) {
+          opp = team === el ? ea : team === ea ? el : ea; // fallback ea
+        } else {
+          // fallback si info manquante
+          opp = inferOppFromPossessions(events, team);
+        }
+      } else {
+        // MULTI-MATCH : on infère via possessions
+        opp = inferOppFromPossessions(events, team);
+      }
+
+      if (!opp) continue;
 
       events.forEach((e) => {
-        const rc = norm(e?.resultat_cthb);
-        const rl = norm(e?.resultat_limoges);
+        const rOpp = pickOppResult(e, team);
+        if (!rOpp || !rOpp.includes(opp)) return;
 
-        // Sélection par-évènement du "résultat adverse" :
-        // - si le côté CTHB contient l’équipe -> l’adversaire est côté LIMOGES
-        // - si le côté LIMOGES contient l’équipe -> l’adversaire est côté CTHB
-        // - sinon fallback: on prend LIMOGES puis CTHB si vide
-        let resOpp = rl || rc;
-        if (team) {
-          if (rc.includes(team)) resOpp = rl || "";
-          else if (rl.includes(team)) resOpp = rc || "";
-        }
-
-        if (!resOpp) return;
-
-        if (isTousLesMatchs) {
-          // Multi-match: pas de borne sur "adv", on classe juste le côté adverse choisi
-          if (isGoal(resOpp, null)) goals++;
-          else if (isSave(resOpp, null)) saves++;
-          else if (isMiss(resOpp, null)) missed++;
-        } else {
-          // Mono-match: si on a le nom explicite de l’adversaire, on le borne
-          if (!adv) return;
-          if (isGoal(resOpp, adv)) goals++;
-          else if (isSave(resOpp, adv)) saves++;
-          else if (isMiss(resOpp, adv)) missed++;
-        }
+        if (isGoal(rOpp, opp)) goals++;
+        else if (isSave(rOpp, opp)) saves++;
+        else if (isMiss(rOpp, opp)) missed++;
       });
     }
 
     if (goals + saves + missed === 0) return null;
 
-    // 🔁 Les calculs en aval restent inchangés
     return [
       {
         title: "SAVES / GOALS %",
-        subtitle: "Arrêts / Buts encaissés",
+        subtitle: "Arrêts / Buts encaissés (adverse uniquement)",
         data: [
           { name: "Arrêts", value: saves },
-          { name: "Buts", value: goals },
+          { name: "Buts",   value: goals },
         ],
       },
       {
         title: "GOALS / NO GOALS %",
-        subtitle: "Arrêts + tirs manqués / Buts encaissés",
+        subtitle: "Arrêts + tirs manqués / Buts encaissés (adverse uniquement)",
         data: [
           { name: "Non-buts", value: saves + missed },
-          { name: "Buts", value: goals },
+          { name: "Buts",     value: goals },
         ],
       },
     ];
-  }, [data, rapport, isTousLesMatchs, equipeAdverse, equipeLocale]);
+  }, [data, rapport, isTousLesMatchs, matchCount, teamName, equipeAdverse, equipeLocale]);
 
   if (!charts) return null;
 
