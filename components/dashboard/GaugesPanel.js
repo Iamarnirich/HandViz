@@ -8,10 +8,9 @@ import {
 } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
-import { useMatch } from "@/contexts/MatchContext";
 
 /* ===============================
-   1) OBJECTIFS (affichage badge)
+   OBJECTIFS (badges)
    =============================== */
 const OBJECTIFS_GAUGES = {
   offensif: {
@@ -36,7 +35,6 @@ const OBJECTIFS_GAUGES = {
   },
 };
 
-/* ===== Badges (lecture & rendu court) ===== */
 function parseTarget(expr) {
   if (!expr) return { kind: "none" };
   const raw = String(expr).trim();
@@ -63,7 +61,6 @@ function checkObjective(value, target) {
   }
 }
 
-/* ===== Couleur anneau (ta carte de seuils) ===== */
 function getGaugeColor(label, value, rapport) {
   if (value === undefined || value === null || isNaN(value)) return "#999";
 
@@ -87,17 +84,17 @@ function getGaugeColor(label, value, rapport) {
       "% Réussite Duel Adv": 50,
     },
   };
-  const sensInverse = [
+  const sensInverse = new Set([
     "Efficacité déf. Globale",
     "Efficacité déf. Placée",
     "Efficacité déf. GE",
     "Eff. en Inf. Numérique",
     "% Tirs en Duel reçus",
-  ];
+  ]);
   const seuil = seuils[rapport]?.[label];
-  const sens = sensInverse.includes(label) ? "inf" : "sup";
+  const sens = sensInverse.has(label) ? "inf" : "sup";
 
-  if (!seuil) return "#D4AF37";
+  if (seuil === undefined) return "#D4AF37";
   if (sens === "sup") return value >= seuil + 5 ? "#B6D8F2" : value >= seuil ? "#9FCDA8" : "#F44336";
   return value <= seuil - 5 ? "#B6D8F2" : value <= seuil ? "#9FCDA8" : "#F44336";
 }
@@ -111,7 +108,6 @@ const norm = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-// Détection robuste des 7 m (couvre "7m", "7 m", "jet de 7 m", etc.)
 const isSevenMEvent = (e) => {
   const clean = (x) =>
     (x || "")
@@ -128,64 +124,94 @@ const isSevenMEvent = (e) => {
   return re.test(sect) || /att7m/.test(act) || re.test(rc) || re.test(rl);
 };
 
-// Sélection du bon champ résultat PAR ÉVÈNEMENT (home/away-agnostique)
-const pickOffRes = (e, team) => {
+/* Sélection résultat par évènement : mono-match vs multi-match */
+const pickOffResSingle = (e, offenseField) =>
+  norm(offenseField ? e?.[offenseField] : e?.resultat_cthb);
+
+const pickDefResSingle = (e, defenseField) =>
+  norm(defenseField ? e?.[defenseField] : e?.resultat_limoges);
+
+const pickOffResMulti = (e, team) => {
   const rc = norm(e?.resultat_cthb);
   const rl = norm(e?.resultat_limoges);
-  if (team && rc.includes(team)) return rc; // notre équipe côté cthb
-  if (team && rl.includes(team)) return rl; // notre équipe côté limoges
-  return rc || rl; // fallback
+  if (team && rc.includes(team)) return rc;
+  if (team && rl.includes(team)) return rl;
+  return rc || rl || "";
 };
-const pickDefRes = (e, team) => {
-  // renvoie le texte résultat du CAMP ADVERSE à notre équipe
+const pickDefResMulti = (e, team) => {
   const rc = norm(e?.resultat_cthb);
   const rl = norm(e?.resultat_limoges);
-  if (team && rc.includes(team)) return rl; // si rc = nous, alors rl = eux
-  if (team && rl.includes(team)) return rc; // si rl = nous, alors rc = eux
-  return rl || rc; // fallback
+  if (team && rc.includes(team)) return rl;
+  if (team && rl.includes(team)) return rc;
+  return rl || rc || "";
 };
 
-function inferTeamsForMatch(events, eqLocal, eqAdv) {
-  if (eqLocal && eqAdv) return { team: norm(eqLocal), opp: norm(eqAdv) };
+/* Possession parser + inférence adversaire */
+const parsePossession = (txt) => {
+  const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+  return m ? { a: m[1].trim(), b: m[2].trim() } : null;
+};
+
+function inferOppForMatch(events, team) {
+  if (!team) return "";
   const counts = new Map();
-  const bump = (n) => { if (!n) return; const k = norm(n); counts.set(k, (counts.get(k) || 0) + 1); };
-  const verbRx = /^(attaque|ca|er|mb|transition)\s+([^\(]+)/i;
+  const bump = (n) => {
+    if (!n) return;
+    const k = norm(n);
+    if (!k || k === team) return;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  };
 
   events.forEach((e) => {
-    const a = norm(e?.nom_action);
-    const m = a.match(verbRx);
-    if (m) bump(m[2]);
-    const r1 = norm(e?.resultat_cthb);
-    const r2 = norm(e?.resultat_limoges);
-    const m1 = r1.match(/^(but|tir|perte|7m|2')\s+([^\s]+)/i);
-    const m2 = r2.match(/^(but|tir|perte|7m|exclusion)\s+([^\s]+)/i);
-    if (m1) bump(m1[2]);
-    if (m2) bump(m2[2]);
-    const p  = norm(e?.possession);
-    const pm = p.match(/^possession\s+([^\s]+)/); // <== simple, comme l’ancien
-    if (pm) bump(pm[1]);
+    const p = parsePossession(e?.possession);
+    if (p) {
+      if (p.a === team) bump(p.b);
+      if (p.b === team) bump(p.a);
+    } else {
+      const rc = norm(e?.resultat_cthb);
+      const rl = norm(e?.resultat_limoges);
+      const rx = /^(but|tir|perte|7m|exclusion|2')\s+([^\s]+)/i;
+      const m1 = rc.match(rx);
+      const m2 = rl.match(rx);
+      if (m1 && m1[2] !== team) bump(m1[2]);
+      if (m2 && m2[2] !== team) bump(m2[2]);
+    }
   });
 
-  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  const guessTeam = eqLocal ? norm(eqLocal) : sorted[0]?.[0] || "";
-  const guessOpp  = eqAdv   ? norm(eqAdv)   : sorted.find(([n]) => n !== guessTeam)?.[0] || "";
-  return { team: guessTeam, opp: guessOpp };
+  let best = "";
+  let max = 0;
+  counts.forEach((v, k) => {
+    if (v > max) { max = v; best = k; }
+  });
+  return best;
 }
 
-/* Moyenne des % par match + moyennes num/den par match (ancien comportement) */
+/* Moyennes par match (robustes) */
 function avgPctAndCount(items) {
-  const valid = items.filter((x) => (x.den || 0) > 0);
-  const n = valid.length;
-  if (n === 0) return { pct: 0, num: 0, den: 0, matches: 0 };
-  const pct = valid.reduce((s, x) => s + x.pct, 0) / n;
-  const num = valid.reduce((s, x) => s + x.num, 0) / n;
-  const den = valid.reduce((s, x) => s + x.den, 0) / n;
-  return { pct, num, den, matches: n };
+  const nAll = items.length || 1;
+  let sumPct = 0, sumNum = 0, sumDen = 0;
+
+  for (const it of items) {
+    const n = Number(it?.num) || 0;
+    const d = Number(it?.den) || 0;
+    const pct = d > 0 ? (Number(it?.pct) || 0) : 0; // 0% si pas de tentative
+    sumPct += pct;
+    sumNum += n;
+    sumDen += d;
+  }
+  return { pct: sumPct / nAll, num: sumNum / nAll, den: sumDen / nAll, matches: nAll };
 }
 
-export default function GaugesPanel({ data, range = "all" }) {
+/* =========================  COMPOSANT  ============================= */
+export default function GaugesPanel({
+  data,
+  range = "all",
+  matchCount = 0,
+  teamName = "",
+  offenseField,
+  defenseField,
+}) {
   const { rapport } = useRapport();
-  const { equipeLocale, equipeAdverse } = useMatch();
 
   const stats = useMemo(() => {
     const labelsOrder =
@@ -211,22 +237,22 @@ export default function GaugesPanel({ data, range = "all" }) {
             "% Réussite Duel Direct",
           ];
 
-    // Groupage par match (comme avant)
     const byMatch = new Map();
     (data || []).forEach((e) => {
-      const id = e?.id_match || "_unknown";
+      const id = e?.id_match ?? "_unknown";
       if (!byMatch.has(id)) byMatch.set(id, []);
       byMatch.get(id).push(e);
     });
     const matchIds = Array.from(byMatch.keys());
-    const matchCount = matchIds.length;
+    const effectiveMatchCount = matchCount || matchIds.length;
 
     const ZONES_DUELS = ["alg", "ald", "central 6m", "1-2d", "1-2g"];
+    const team = norm(teamName);
 
     const perMatch = matchIds.map((id) => {
       const evts = byMatch.get(id) || [];
-      const { team, opp } = inferTeamsForMatch(evts, equipeLocale, equipeAdverse);
 
+      const opp = inferOppForMatch(evts, team);
       const L = {};
       if (!team && !opp) {
         labelsOrder.forEach((l) => (L[l] = { num: 0, den: 0, pct: 0 }));
@@ -234,39 +260,32 @@ export default function GaugesPanel({ data, range = "all" }) {
       }
 
       if (rapport === "defensif") {
-        // ===== DÉFENSIF : borne bien sur l’adversaire via action/possession/résultat =====
-        let possAdv = 0,
-          butsRecus = 0,
-          possAP = 0,
-          possGE = 0,
-          butsAP = 0,
-          butsGE = 0,
-          supPoss = 0,     // possessions adverses en supériorité (nous en infériorité)
-          butsInf = 0,     // buts encaissés durant ces possessions
-          tirsAP = 0,
-          tirsDuel = 0,
-          butsDuel = 0;
+        let possAdv = 0, butsRecus = 0,
+            possAP = 0, possGE = 0, butsAP = 0, butsGE = 0,
+            supPoss = 0, butsInf = 0,
+            tirsAP = 0, tirsDuel = 0, butsDuel = 0;
 
         evts.forEach((e) => {
           const a   = norm(e?.nom_action);
           const p   = norm(e?.possession);
           const rcR = norm(e?.resultat_cthb);
           const rlR = norm(e?.resultat_limoges);
-          const rOpp = pickDefRes(e, team); // résultat côté ADVERSAIRE vs notre team
+          const rOpp = (effectiveMatchCount === 1)
+            ? pickDefResSingle(e, defenseField)
+            : pickDefResMulti(e, team);
           const sect = norm(e?.secteur);
           const seven = isSevenMEvent(e);
           const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
 
-          // borne “ancienne façon” : action/possession/résultat citent l’adversaire
           const isOppAction =
             (a && a.includes(` ${opp}`)) ||
             (p && p.includes(`possession ${opp}`)) ||
             (rcR && rcR.includes(` ${opp}`)) ||
             (rlR && rlR.includes(` ${opp}`));
-
           if (!isOppAction) return;
 
           if (p.startsWith(`possession ${opp}`)) possAdv++;
+
           const isButOpp = rOpp.startsWith(`but ${opp}`);
           const isTirOpp = rOpp.startsWith("tir ") && rOpp.includes(`${opp}`);
           if (isButOpp) butsRecus++;
@@ -294,7 +313,6 @@ export default function GaugesPanel({ data, range = "all" }) {
             if (isButOpp) butsGE++;
           }
 
-          // supériorité pour l’adversaire (nous en infériorité)
           const nb = norm(e?.nombre);
           const oppInSup = nb.includes("superiorite") || nb.includes("superiorité") || nb.includes("supériorité");
           if (oppInSup && (isAP || isGE || p.startsWith(`possession ${opp}`))) {
@@ -303,66 +321,34 @@ export default function GaugesPanel({ data, range = "all" }) {
           }
         });
 
-        L["Efficacité déf. Globale"] = {
-          num: butsRecus,
-          den: possAdv,
-          pct: possAdv > 0 ? (butsRecus / possAdv) * 100 : 0,
-        };
-        L["Efficacité déf. Placée"] = {
-          num: butsAP,
-          den: possAP,
-          pct: possAP > 0 ? (butsAP / possAP) * 100 : 0,
-        };
-        L["Efficacité déf. GE"] = {
-          num: butsGE,
-          den: possGE,
-          pct: possGE > 0 ? (butsGE / possGE) * 100 : 0,
-        };
-        L["Eff. en Inf. Numérique"] = {
-          num: butsInf,
-          den: supPoss,
-          pct: supPoss > 0 ? (butsInf / supPoss) * 100 : 0,
-        };
-        L["% Tirs en Duel reçus"] = {
-          num: tirsDuel,
-          den: tirsAP,
-          pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0,
-        };
-        L["% Réussite Duel Adv"] = {
-          num: butsDuel,
-          den: tirsDuel,
-          pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0,
-        };
+        L["Efficacité déf. Globale"] = { num: butsRecus, den: possAdv, pct: possAdv > 0 ? (butsRecus / possAdv) * 100 : 0 };
+        L["Efficacité déf. Placée"] = { num: butsAP,    den: possAP,   pct: possAP > 0 ? (butsAP / possAP) * 100 : 0 };
+        L["Efficacité déf. GE"]     = { num: butsGE,    den: possGE,   pct: possGE > 0 ? (butsGE / possGE) * 100 : 0 };
+        L["Eff. en Inf. Numérique"] = { num: butsInf,   den: supPoss,  pct: supPoss > 0 ? (butsInf / supPoss) * 100 : 0 };
+        L["% Tirs en Duel reçus"]   = { num: tirsDuel,  den: tirsAP,   pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0 };
+        L["% Réussite Duel Adv"]    = { num: butsDuel,  den: tirsDuel, pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0 };
       } else {
-        // ===== OFFENSIF : ancienne logique + robustesse champ résultat =====
-        let poss = 0,
-          possAP = 0,
-          possGE = 0,
-          tirsAP = 0,
-          butsAP = 0,
-          tirs7m = 0,
-          buts7m = 0,
-          tirsH7 = 0,
-          butsH7 = 0,
-          supPoss = 0,
-          butsSup = 0,
-          infPoss = 0,
-          butsInf = 0,
-          tirsDuel = 0,
-          butsDuel = 0,
-          butsGE = 0;
+        let poss = 0, possAP = 0, possGE = 0,
+            tirsAP = 0, butsAP = 0,
+            tirs7m = 0, buts7m = 0,
+            tirsH7 = 0, butsH7 = 0,
+            supPoss = 0, butsSup = 0,
+            infPoss = 0, butsInf = 0,
+            tirsDuel = 0, butsDuel = 0,
+            butsGE = 0;
 
         evts.forEach((e) => {
           const a   = norm(e?.nom_action);
           const p   = norm(e?.possession);
           const rcR = norm(e?.resultat_cthb);
           const rlR = norm(e?.resultat_limoges);
-          const rTeam = pickOffRes(e, team);
+          const rTeam = (effectiveMatchCount === 1)
+            ? pickOffResSingle(e, offenseField)
+            : pickOffResMulti(e, team);
           const sect = norm(e?.secteur);
           const seven = isSevenMEvent(e);
           const inDuelZone = ["alg", "ald", "central 6m", "1-2d", "1-2g"].some((z) => sect.includes(z));
 
-          // borne “ancienne façon” : action/résultat/possession citent notre équipe
           const isTeamEvt =
             (a && a.includes(` ${team}`)) ||
             (p && p.startsWith(`possession ${team}`)) ||
@@ -416,59 +402,18 @@ export default function GaugesPanel({ data, range = "all" }) {
           if (teamInf && rTeam.startsWith(`but ${team}`)) butsInf++;
         });
 
-        L["Eff. Globale"] = {
-          num: butsH7 + buts7m,
-          den: poss,
-          pct: poss > 0 ? ((butsH7 + buts7m) / poss) * 100 : 0,
-        };
-        L["Eff. Attaque Placée"] = {
-          num: butsAP,
-          den: possAP,
-          pct: possAP > 0 ? (butsAP / possAP) * 100 : 0,
-        };
-        L["Eff. Grand Espace"] = {
-          num: butsGE,
-          den: possGE,
-          pct: possGE > 0 ? (butsGE / possGE) * 100 : 0,
-        };
-        L["Eff. Tirs (hors 7m)"] = {
-          num: butsH7,
-          den: tirsH7,
-          pct: tirsH7 > 0 ? (butsH7 / tirsH7) * 100 : 0,
-        };
-        L["Tirs en Attaque Placée"] = {
-          num: butsAP,
-          den: tirsAP,
-          pct: tirsAP > 0 ? (butsAP / tirsAP) * 100 : 0,
-        };
-        L["Tirs sur 7m"] = {
-          num: buts7m,
-          den: tirs7m,
-          pct: tirs7m > 0 ? (buts7m / tirs7m) * 100 : 0,
-        };
-        L["Eff. Supériorité"] = {
-          num: butsSup,
-          den: supPoss,
-          pct: supPoss > 0 ? (butsSup / supPoss) * 100 : 0,
-        };
-        L["Eff. Infériorité"] = {
-          num: butsInf,
-          den: infPoss,
-          pct: infPoss > 0 ? (butsInf / infPoss) * 100 : 0,
-        };
-        L["% tirs en Duel Direct"] = {
-          num: tirsDuel,
-          den: tirsAP,
-          pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0,
-        };
-        L["% Réussite Duel Direct"] = {
-          num: butsDuel,
-          den: tirsDuel,
-          pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0,
-        };
+        L["Eff. Globale"] = { num: butsH7 + buts7m, den: poss,   pct: poss   > 0 ? ((butsH7 + buts7m) / poss)   * 100 : 0 };
+        L["Eff. Attaque Placée"] = { num: butsAP,   den: possAP, pct: possAP > 0 ? (butsAP / possAP) * 100 : 0 };
+        L["Eff. Grand Espace"]   = { num: butsGE,   den: possGE, pct: possGE > 0 ? (butsGE / possGE) * 100 : 0 };
+        L["Eff. Tirs (hors 7m)"] = { num: butsH7,   den: tirsH7, pct: tirsH7 > 0 ? (butsH7 / tirsH7) * 100 : 0 };
+        L["Tirs en Attaque Placée"] = { num: butsAP, den: tirsAP, pct: tirsAP > 0 ? (butsAP / tirsAP) * 100 : 0 };
+        L["Tirs sur 7m"] = { num: buts7m, den: tirs7m, pct: tirs7m > 0 ? (buts7m / tirs7m) * 100 : 0 };
+        L["Eff. Supériorité"] = { num: butsSup, den: supPoss, pct: supPoss > 0 ? (butsSup / supPoss) * 100 : 0 };
+        L["Eff. Infériorité"] = { num: butsInf, den: infPoss, pct: infPoss > 0 ? (butsInf / infPoss) * 100 : 0 };
+        L["% tirs en Duel Direct"] = { num: tirsDuel, den: tirsAP, pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0 };
+        L["% Réussite Duel Direct"] = { num: butsDuel, den: tirsDuel, pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0 };
       }
 
-      // bornes propres
       labelsOrder.forEach((lb) => {
         const x = L[lb];
         if (!x) return;
@@ -480,9 +425,8 @@ export default function GaugesPanel({ data, range = "all" }) {
       return L;
     });
 
-    // Sortie: 1 match => brut ; sinon => moyenne des % + moyenne num/den
     const out = labelsOrder.map((label) => {
-      if (matchCount === 1) {
+      if (effectiveMatchCount === 1) {
         const only = perMatch[0][label] || { num: 0, den: 0, pct: 0 };
         return {
           label,
@@ -503,20 +447,17 @@ export default function GaugesPanel({ data, range = "all" }) {
     });
 
     return out;
-  }, [data, rapport, equipeLocale, equipeAdverse]);
+  }, [data, matchCount, teamName, offenseField, defenseField, rapport]);
 
-  // Applique objectifs (badge OK/BAD)
   const displayedStats = useMemo(() => {
-    if (!stats) return [];
     const table = OBJECTIFS_GAUGES[rapport] || {};
-    return stats.map((g) => {
+    return (stats || []).map((g) => {
       const target = parseTarget(table[g.label]);
       const { status, text } = checkObjective(g.value, target);
       return { ...g, status, targetText: text };
     });
   }, [stats, rapport]);
 
-  // Découpage (identique)
   const sliced = useMemo(() => {
     if (!displayedStats) return [];
     if (range === "left") return displayedStats.slice(0, 3);
@@ -530,9 +471,7 @@ export default function GaugesPanel({ data, range = "all" }) {
     <div className="grid gap-4 grid-cols-1">
       {sliced.map((g, idx) => {
         const badge = g.status !== "na" && g.targetText ? (
-          <span
-            className={`ml-2 inline-flex items-center px-2 py-[2px] rounded-full text-[11px] border `}
-          >
+          <span className="ml-2 inline-flex items-center px-2 py-[2px] rounded-full text-[11px] border">
             {g.targetText}
           </span>
         ) : null;
@@ -543,7 +482,7 @@ export default function GaugesPanel({ data, range = "all" }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: idx * 0.1, duration: 0.4 }}
-            className={`bg-white border rounded-xl p-4 w-[200px] h-[180px] flex flex-col justify-between items-center shadow-md hover:scale-[1.02] transition-all`}
+            className="bg-white border rounded-xl p-4 w-[200px] h-[180px] flex flex-col justify-between items-center shadow-md hover:scale-[1.02] transition-all"
           >
             <p className="text-[13px] text-gray-700 font-semibold mb-1 tracking-wide">
               {g.count}
