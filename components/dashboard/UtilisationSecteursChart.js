@@ -16,52 +16,66 @@ import { useRapport } from "@/contexts/RapportContext";
 
 const COLORS = ["#D4AF37", "#111111", "#7E7E7E", "#B8B8B8", "#DDDDDD", "#999999"];
 
-export default function UtilisationSecteursChart({ data }) {
-  const { isTousLesMatchs } = useMatch();
+// utils
+const norm = (s) =>
+  (s || "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+function inferTeamsForMatch(events, eqLocal, eqAdv) {
+  // si le contexte d’un mono-match est fourni, on s’y tient
+  if (eqLocal && eqAdv) return { team: norm(eqLocal), opp: norm(eqAdv) };
+
+  // fallback: déduction robuste
+  const counts = new Map();
+  const bump = (n) => {
+    if (!n) return;
+    const k = norm(n);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  };
+  const rxAtk = /^(attaque|ca|er|mb|transition)\s+([^\(]+)/i;
+  const rxRes = /^(but|tir|perte|7m|2'|exclusion)\s+([^\s]+)/i;
+
+  (events || []).forEach((e) => {
+    const a = norm(e?.nom_action);
+    const mA = a.match(rxAtk);
+    if (mA) bump(mA[2]);
+
+    const r1 = norm(e?.resultat_cthb);
+    const r2 = norm(e?.resultat_limoges);
+    const m1 = r1.match(rxRes);
+    const m2 = r2.match(rxRes);
+    if (m1) bump(m1[2]);
+    if (m2) bump(m2[2]);
+  });
+
+  const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  const team = sorted[0]?.[0] || "";
+  const opp = sorted.find(([n]) => n !== team)?.[0] || "";
+  return { team, opp };
+}
+
+export default function UtilisationSecteursChart({
+  data,
+  teamName,        // ✅ passé par le DashboardLayout
+  offenseField,    // ✅ non utilisé ici mais gardé pour cohérence API
+  defenseField,    // ✅ non utilisé ici mais gardé pour cohérence API
+  matchCount,      // ✅ non utilisé directement (on re-compte), mais laissé pour compat
+}) {
+  const { isTousLesMatchs, equipeLocale, equipeAdverse } = useMatch();
   const { rapport } = useRapport();
 
   const secteursData = useMemo(() => {
-    const norm = (s) => (s || "").toLowerCase().trim();
-    const parsePossession = (txt) => {
-      const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
-      return m ? { a: m[1].trim(), b: m[2].trim() } : null;
-    };
+    if (!data || data.length === 0) return [];
 
-    // Déduit l’équipe dominante sur un match (locale ou visiteuse)
-    const inferTeamForMatch = (events) => {
-      const counts = new Map();
-      const bump = (n) => {
-        if (!n) return;
-        const k = norm(n);
-        counts.set(k, (counts.get(k) || 0) + 1);
-      };
-      const rxAtk = /^attaque\s+([^\(]+)/i;
-      const rxRes = /^(but|tir|perte|7m|2'|exclusion)\s+([^\s]+)/i;
+    // si on est en "tous les matchs" et qu’aucune équipe n’est choisie → rien à afficher
+    const teamRef = norm(teamName || "");
+    if (isTousLesMatchs && !teamRef) return [];
 
-      events.forEach((e) => {
-        const a = norm(e?.nom_action);
-        const mA = a.match(rxAtk);
-        if (mA) bump(mA[1]);
-
-        const p = parsePossession(e?.possession);
-        if (p) {
-          bump(p.a);
-          bump(p.b);
-        }
-
-        const r1 = norm(e?.resultat_cthb);
-        const r2 = norm(e?.resultat_limoges);
-        const m1 = r1.match(rxRes);
-        const m2 = r2.match(rxRes);
-        if (m1) bump(m1[2]);
-        if (m2) bump(m2[2]);
-      });
-
-      const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-      return sorted[0]?.[0] || "";
-    };
-
-    // Regrouper par match pour pouvoir moyenner par match
+    // regrouper par match
     const byMatch = new Map();
     (data || []).forEach((e) => {
       const id = e?.id_match ?? "_unknown";
@@ -69,32 +83,52 @@ export default function UtilisationSecteursChart({ data }) {
       byMatch.get(id).push(e);
     });
 
-    const sectorTotals = {}; // cumul des comptes (somme sur les matchs)
+    const sectorTotals = {};
     let matchesUsed = 0;
 
     for (const [, events] of byMatch.entries()) {
-      const team = inferTeamForMatch(events);
-      if (!team) continue; // on ignore si on ne parvient pas à déduire l’équipe
+      // équipes pour CE match
+      const { team, opp } = inferTeamsForMatch(events, equipeLocale, equipeAdverse);
 
-      // Compteurs par secteur pour CE match (pour éviter de compter le même match 0 fois)
+      // déterminer la "cible" selon rapport + sélection
+      // - offensif : cible = teamRef
+      // - defensif : cible = adversaire de teamRef
+      let cible = "";
+      if (teamRef) {
+        if (rapport === "offensif") {
+          cible = teamRef;
+        } else {
+          // on mappe teamRef -> opp si teamRef===team, sinon team si teamRef===opp
+          const t = norm(team);
+          const o = norm(opp);
+          if (teamRef && teamRef === t) cible = o;
+          else if (teamRef && teamRef === o) cible = t;
+          else {
+            // si l’équipe sélectionnée n’est pas reconnue dans ce match, on ignore ce match
+            continue;
+          }
+        }
+      } else {
+        // cas extrême (devrait peu arriver) : pas de teamRef -> on prend team en offensif / opp en défensif
+        cible = rapport === "offensif" ? team : opp;
+      }
+      if (!cible) continue;
+
+      // compte par secteur sur CE match
       const perMatchSectors = {};
-
       events.forEach((e) => {
         const action = norm(e?.nom_action);
-        if (!action.startsWith("attaque ")) return; // on ne garde que l’AP
+        if (!action.startsWith("attaque ")) return;
 
-        const isTeamAP = action.startsWith(`attaque ${team}`);
-        const isWanted =
-          rapport === "offensif" ? isTeamAP : !isTeamAP; // offensif = AP de l’équipe, défensif = AP adverse
-        if (!isWanted) return;
+        // on ne regarde que les AP de la cible
+        if (!action.startsWith(`attaque ${cible}`)) return;
 
-        const secteur = (e?.secteur || "").trim();
+        const secteur = String(e?.secteur || "").trim();
         if (!secteur) return;
 
         perMatchSectors[secteur] = (perMatchSectors[secteur] || 0) + 1;
       });
 
-      // Si on a au moins une AP pertinente sur ce match, on compte ce match dans la moyenne
       if (Object.keys(perMatchSectors).length > 0) {
         matchesUsed += 1;
         for (const [secteur, cnt] of Object.entries(perMatchSectors)) {
@@ -103,6 +137,7 @@ export default function UtilisationSecteursChart({ data }) {
       }
     }
 
+    // moyenne par match quand on est en "tous les matchs"
     const denom = isTousLesMatchs ? Math.max(1, matchesUsed) : 1;
 
     return Object.entries(sectorTotals)
@@ -111,7 +146,7 @@ export default function UtilisationSecteursChart({ data }) {
         count: Math.round(sum / denom),
       }))
       .sort((a, b) => b.count - a.count);
-  }, [data, rapport, isTousLesMatchs]);
+  }, [data, rapport, isTousLesMatchs, teamName, equipeLocale, equipeAdverse]);
 
   return (
     <motion.div
