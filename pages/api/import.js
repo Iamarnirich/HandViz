@@ -63,8 +63,6 @@ function parseCsvDate(raw) {
     const day = parseInt(m[1], 10);
     const mon = parseInt(m[2], 10) - 1;
     const yr = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
-    const hh = m[4] ? parseInt(m[4], 10) : 0;
-    const mm = m[5] ? parseInt(m[5], 10) : 0;
     const dt = new Date(Date.UTC(yr, mon, day, 0, 0, 0));
     if (!isNaN(dt.valueOf())) return dt;
   }
@@ -125,6 +123,7 @@ function convertirTemps(val) {
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
+/** ===== AJOUT : variantes CSV + nouveaux champs ===== */
 function normaliserRow(row, equipe_locale, equipe_visiteuse) {
   const keys = Object.keys(row || {});
   const lc = (k) => k.toLowerCase();
@@ -155,6 +154,22 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
       lc(k).includes("gb") && lc(k).includes(equipe_visiteuse.toLowerCase())
   );
 
+  // Helper robuste (tout en minuscule + variantes d’apostrophes)
+  const findCol = (team, ...patterns) =>
+    keys.find((k) => {
+      const L = lc(k);
+      return patterns.some((p) => L.includes(p)) && L.includes(team.toLowerCase());
+    });
+
+  // "Joueur - USDK"
+  const col_joueur_minus_cthb = findCol(equipe_locale, "joueur - ");
+  // "Joueur -' USDK" (apostrophe droite ou typographique)
+  const col_joueur_minus_cthb_prime = findCol(equipe_locale, "joueur -'", "joueur -’");
+  // "Joueur + USDK"
+  const col_joueur_plus_cthb = findCol(equipe_locale, "joueur + ");
+  // "Joueur +' Paris"
+  const col_joueur_plus_adv_prime = findCol(equipe_visiteuse, "joueur +'", "joueur +’");
+
   return {
     nom_action: String(row["Nom"] || row["nom"] || "").trim(),
     resultat_cthb: col_cthb ? String(row[col_cthb] || "").trim() : "",
@@ -181,6 +196,20 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
     nom_joueuse_cthb: col_j_cthb ? String(row[col_j_cthb] || "").trim() : "",
     nom_joueuse_adv: col_j_adv ? String(row[col_j_adv] || "").trim() : "",
     poste: String(row["Poste"] || row["poste"] || "").trim(),
+
+    arbitres: String(row["Arbitres"] || row["arbitres"] || "").trim(),
+    passe_decisive: String(
+      row["Passe décisive USDK"] ||
+      row["Passe décisive"] ||
+      row["passe_decisive"] ||
+      ""
+    ).trim(),
+    journee: String(row["Journée"] || row["Journee"] || row["journee"] || "").trim(),
+
+    joueur_minus_cthb: col_joueur_minus_cthb ? String(row[col_joueur_minus_cthb] || "").trim() : "",
+    joueur_minus_cthb_prime: col_joueur_minus_cthb_prime ? String(row[col_joueur_minus_cthb_prime] || "").trim() : "",
+    joueur_plus_cthb: col_joueur_plus_cthb ? String(row[col_joueur_plus_cthb] || "").trim() : "",
+    joueur_plus_adv_prime: col_joueur_plus_adv_prime ? String(row[col_joueur_plus_adv_prime] || "").trim() : "",
   };
 }
 
@@ -207,7 +236,8 @@ async function ensureClubByName(nom) {
   return created.id;
 }
 
-async function lierJoueuseEtEvenement(id_evenement, nom, poste, equipe) {
+/** ===== AJOUT : pose de flags sur joueuses_evenements si requis ===== */
+async function lierJoueuseEtEvenement(id_evenement, nom, poste, equipe, flags = {}) {
   if (!nom || !id_evenement) return;
 
   let { data: joueuse } = await supabase
@@ -235,18 +265,28 @@ async function lierJoueuseEtEvenement(id_evenement, nom, poste, equipe) {
     .match({ id_evenement, id_joueuse: joueuse.id })
     .maybeSingle();
 
+  const patch = {};
+  if (flags.minuscthb)      patch.joueur_minus_cthb = true;
+  if (flags.minuscthbPrime) patch.joueur_minus_cthb_prime = true;
+  if (flags.pluscthb)       patch.joueur_plus_cthb = true;
+  if (flags.plusadvPrime)   patch.joueur_plus_adv_prime = true;
+
   if (!link) {
+    const insertObj = {
+      id_evenement,
+      id_joueuse: joueuse.id,
+      nom_joueuse: nom,
+      ...patch,
+    };
     const { error: linkErr } = await supabase
       .from("joueuses_evenements")
-      .insert({
-        id_evenement,
-        id_joueuse: joueuse.id,
-        nom_joueuse: nom,
-      });
-
-    if (linkErr) {
-      console.warn("Lien joueuse_evenement échoué:", linkErr?.message);
-    }
+      .insert(insertObj);
+    if (linkErr) console.warn("Lien joueuses_evenements échoué:", linkErr?.message);
+  } else if (Object.keys(patch).length > 0) {
+    await supabase
+      .from("joueuses_evenements")
+      .update(patch)
+      .eq("id", link.id);
   }
 }
 
@@ -335,7 +375,7 @@ export default async function handler(req, res) {
     }
 
     if (!match_id) {
-      // créer le match
+      // créer le match (AJOUT: journee)
       const { data: newMatch, error: insertError } = await supabase
         .from("matchs")
         .insert({
@@ -343,6 +383,7 @@ export default async function handler(req, res) {
           equipe_locale,
           equipe_visiteuse,
           date_match: date_match_iso, // <-- ISO propre
+          journee: firstRow.journee || null, // <-- AJOUT
         })
         .select()
         .single();
@@ -356,10 +397,15 @@ export default async function handler(req, res) {
       match_id = newMatch.id;
       created = true;
     } else {
-      // mettre à jour les libellés (et la date si changée)
+      // mettre à jour les libellés (et la date si changée) + journee
       const { error: updErr } = await supabase
         .from("matchs")
-        .update({ equipe_locale, equipe_visiteuse, date_match: date_match_iso })
+        .update({
+          equipe_locale,
+          equipe_visiteuse,
+          date_match: date_match_iso,
+          journee: firstRow.journee || null, // <-- AJOUT
+        })
         .eq("id", match_id);
 
       if (updErr) {
@@ -424,6 +470,8 @@ export default async function handler(req, res) {
           sanctions: row.sanctions,
           gb_cthb: row.gb_cthb,
           gb_adv: row.gb_adv,
+          arbitres: row.arbitres,
+          passe_decisive: row.passe_decisive,
         })
         .select()
         .single();
@@ -433,7 +481,7 @@ export default async function handler(req, res) {
         continue;
       }
 
-      // Liens joueuses
+      // Liens joueuses (comportement existant)
       if (row.nom_joueuse_cthb) {
         await lierJoueuseEtEvenement(
           event.id,
@@ -464,6 +512,44 @@ export default async function handler(req, res) {
           row.gb_adv,
           "GB",
           equipe_visiteuse
+        );
+      }
+
+      // ===== NOUVEAU : flags fixes dans joueuses_evenements =====
+      if (row.joueur_minus_cthb) {
+        await lierJoueuseEtEvenement(
+          event.id,
+          row.joueur_minus_cthb,
+          null,
+          equipe_locale,
+          { minuscthb: true }
+        );
+      }
+      if (row.joueur_minus_cthb_prime) {
+        await lierJoueuseEtEvenement(
+          event.id,
+          row.joueur_minus_cthb_prime,
+          null,
+          equipe_locale,
+          { minuscthbPrime: true }
+        );
+      }
+      if (row.joueur_plus_cthb) {
+        await lierJoueuseEtEvenement(
+          event.id,
+          row.joueur_plus_cthb,       // <-- correction variable
+          null,
+          equipe_locale,
+          { pluscthb: true }           // <-- correction nom de flag
+        );
+      }
+      if (row.joueur_plus_adv_prime) {
+        await lierJoueuseEtEvenement(
+          event.id,
+          row.joueur_plus_adv_prime,
+          null,
+          equipe_visiteuse,
+          { plusadvPrime: true }
         );
       }
     }
