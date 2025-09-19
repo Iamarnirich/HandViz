@@ -287,9 +287,9 @@ export default function GaugesPanel({
 
           if (p.startsWith(`possession ${opp}`)) possAdv++;
 
-          const isButOpp = rOpp.startsWith(`but ${opp}`) || rOpp.startsWith(`7m obtenu ${opp}`) || (s.startsWith("2")) || s.startsWith("cr");
+          const isButOpp = rOpp.startsWith(`but ${opp}`) || rOpp.startsWith(`7m obtenu`) || ((s.startsWith("2")) || s.startsWith("cr"));
           const isTirOpp = rOpp.startsWith("tir ") && rOpp.includes(`${opp}`);
-          if (isButOpp) butsRecus++;
+          
 
           const isAP = a.startsWith(`attaque ${opp}`);
           const isGE =
@@ -297,11 +297,13 @@ export default function GaugesPanel({
             a.startsWith(`er ${opp}`) ||
             a.startsWith(`mb ${opp}`) ||
             a.startsWith(`transition ${opp}`);
-
+          if (isAP || isGE || seven) {
+            if (isButOpp) butsRecus++;
+          }
           if (isAP) {
             possAP++;
             if (isButOpp) butsAP++;
-            if ((isTirOpp || isButOpp) && !seven) {
+            if ((isTirOpp || rOpp.startsWith(`but ${opp}`)) && !seven) {
               tirsAP++;
               if (inDuelZone) {
                 tirsDuel++;
@@ -315,8 +317,8 @@ export default function GaugesPanel({
           }
 
           const nb = norm(e?.nombre);
-          const oppInSup = nb.includes("superiorite") || nb.includes("superiorité") || nb.includes("supériorité");
-          if (oppInSup && (isAP || isGE || p.startsWith(`possession ${opp}`))) {
+          const oppInSup = nb.includes("inferiorite") || nb.includes("inferiorité") || nb.includes("infériorité");
+          if (oppInSup && (isAP || isGE || seven)) {
             supPoss++;
             if (isButOpp) butsInf++;
           }
