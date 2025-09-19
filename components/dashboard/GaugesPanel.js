@@ -397,10 +397,10 @@ export default function GaugesPanel({
             if (rTeam.startsWith(`but ${team}`)) buts7m++;
           }
 
-          if (isGE && effbut || (s.startsWith("2"))) butsGE++;
+          if (isGE && effbut || (s.startsWith("2")) || s.startsWith("cr")) butsGE++;
 
-          if (teamSup && effbut || (s.startsWith("2"))) butsSup++;
-          if (teamInf && effbut || (s.startsWith("2"))) butsInf++;
+          if (teamSup && effbut || (s.startsWith("2"))|| s.startsWith("cr")) butsSup++;
+          if (teamInf && effbut || (s.startsWith("2")) || s.startsWith("cr")) butsInf++;
         });
 
         L["Eff. Globale"] = { num: butsH7 + buts7m, den: poss,   pct: poss   > 0 ? ((butsH7 + buts7m) / poss)   * 100 : 0 };
