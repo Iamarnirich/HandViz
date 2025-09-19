@@ -165,12 +165,58 @@ export default function TerrainHandball({
     return out;
   }, [data, rapport, isTousLesMatchs, equipeLocale, teamName, offenseField, defenseField]);
 
-  const getColor = (eff) => {
-    if (eff >= 75) return "bg-[#D4AF37]";
-    if (eff >= 60) return "bg-[#D4AF37]/80";
-    if (eff >= 30) return "bg-[#999999]";
-    return "bg-[#555555]";
-  };
+  // Couleurs Tailwind : rouge / orange / vert
+function getColor(secteurKey, eff) {
+  const k = (secteurKey || "").toLowerCase();
+
+  const inRange = (x, a, b) => x >= a && x < b; // intervalle [a, b)
+
+  // ALD & ALG : orange 70–75, <70 rouge, >75 vert
+  if (k === "ald" || k === "alg") {
+    if (inRange(eff, 70, 75)) return "bg-[#FFD4A1]";
+    if (eff > 75) return "bg-[#9FCDA8]";
+    return "bg-[#FFBFB0]";
+  }
+
+  // Central 6m : orange 75–80, <75 rouge, >80 vert
+  if (k === "central 6m") {
+    if (inRange(eff, 75, 80)) return "bg-[#FFD4A1]";
+    if (eff > 80) return "bg-[#9FCDA8]";
+    return "bg-[#FFBFB0]";
+  }
+
+  // 1-2D & 1-2G : orange 65–70, <65 rouge, >70 vert
+  if (k === "1-2d" || k === "1-2g") {
+    if (inRange(eff, 65, 70)) return "bg-[#FFD4A1]";
+    if (eff > 70) return "bg-[#9FCDA8]";
+    return "bg-[#FFBFB0]";
+  }
+
+  // ARD, ARG, Central 9m : orange 50–55, <50 rouge, >55 vert
+  if (k === "ard" || k === "arg" || k === "central 9m") {
+    if (inRange(eff, 50, 55)) return "bg-[#FFD4A1]";
+    if (eff > 55) return "bg-[#9FCDA8]";
+    return "bg-[#FFBFB0]";
+  }
+
+  // 7M : orange 80–85, <80 rouge, >85 vert
+  if (k === "7m") {
+    if (inRange(eff, 80, 85)) return "bg-[#FFD4A1]";
+    if (eff > 85) return "bg-[#9FCDA8]";
+    return "bg-[#FFBFB0]";
+  }
+
+  // Central 7-9m : orange 55–60, <55 rouge, >60 vert
+  if (k === "central 7-9m") {
+    if (inRange(eff, 55, 60)) return "bg-[#FFD4A1]";
+    if (eff > 60) return "bg-[#9FCDA8]";
+    return "bg-[#FFBFB0]";
+  }
+
+  // fallback (si un secteur inconnu arrive)
+  return "bg-gray-600";
+}
+
 
   return (
     <div className="relative w-full h-full max-h-[580px] rounded-xl overflow-hidden shadow-lg border bg-white">
@@ -186,12 +232,13 @@ export default function TerrainHandball({
         if (!s || !s.tirs) return null;
 
         const eff = (s.buts / s.tirs) * 100;
-        const bg = getColor(eff);
+        const bg = getColor(key, eff);
+
 
         return (
           <div
             key={key}
-            className={`absolute px-3 py-2 rounded-xl text-white text-[10px] font-medium text-center shadow-lg ${bg}`}
+            className={`absolute px-3 py-2 rounded-xl text-black text-[10px] font-medium text-center shadow-lg ${bg}`}
             style={{
               top: pos.top,
               left: pos.left,
