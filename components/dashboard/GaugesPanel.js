@@ -286,7 +286,7 @@ export default function GaugesPanel({
 
           if (p.startsWith(`possession ${opp}`)) possAdv++;
 
-          const isButOpp = rOpp.startsWith(`but ${opp}`);
+          const isButOpp = rOpp.startsWith(`but ${opp}`) ;
           const isTirOpp = rOpp.startsWith("tir ") && rOpp.includes(`${opp}`);
           if (isButOpp) butsRecus++;
 
@@ -342,6 +342,7 @@ export default function GaugesPanel({
           const p   = norm(e?.possession);
           const rcR = norm(e?.resultat_cthb);
           const rlR = norm(e?.resultat_limoges);
+          const s=norm(e?.sanctions);
           const rTeam = (effectiveMatchCount === 1)
             ? pickOffResSingle(e, offenseField)
             : pickOffResMulti(e, team);
@@ -373,15 +374,15 @@ export default function GaugesPanel({
           const teamInf = nb.includes("inferiorite") || nb.includes("inferiorité") || nb.includes("infériorité");
           if (teamSup && (isAP || isGE)) supPoss++;
           if (teamInf && (isAP || isGE)) infPoss++;
-
+          const effbut=rTeam.startsWith(`but ${team}`)|| rTeam.startsWith(`7m obtenu ${team}`);
           const isShotAny = rTeam.startsWith("tir ") || rTeam.startsWith(`but ${team}`);
           if (!seven && isShotAny) {
             tirsH7++;
-            if (rTeam.startsWith(`but ${team}`)) butsH7++;
+            if ( effbut || (s.startsWith("2"))) butsH7++;
           }
 
           if (isAP) {
-            if (rTeam.startsWith(`but ${team}`)) butsAP++;
+            if ( effbut || ((s.startsWith("2")) || s.startsWith("cr"))) butsAP++;
             if (isShotAny && !seven) {
               tirsAP++;
               if (inDuelZone) {
@@ -396,10 +397,10 @@ export default function GaugesPanel({
             if (rTeam.startsWith(`but ${team}`)) buts7m++;
           }
 
-          if (isGE && rTeam.startsWith(`but ${team}`)) butsGE++;
+          if (isGE && effbut || (s.startsWith("2"))) butsGE++;
 
-          if (teamSup && rTeam.startsWith(`but ${team}`)) butsSup++;
-          if (teamInf && rTeam.startsWith(`but ${team}`)) butsInf++;
+          if (teamSup && effbut || (s.startsWith("2"))) butsSup++;
+          if (teamInf && effbut || (s.startsWith("2"))) butsInf++;
         });
 
         L["Eff. Globale"] = { num: butsH7 + buts7m, den: poss,   pct: poss   > 0 ? ((butsH7 + buts7m) / poss)   * 100 : 0 };
