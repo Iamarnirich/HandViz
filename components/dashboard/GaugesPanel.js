@@ -274,6 +274,7 @@ export default function GaugesPanel({
             ? pickDefResSingle(e, defenseField)
             : pickDefResMulti(e, team);
           const sect = norm(e?.secteur);
+          const s= norm(e?.sanctions);
           const seven = isSevenMEvent(e);
           const inDuelZone = ZONES_DUELS.some((z) => sect.includes(z));
 
@@ -286,7 +287,7 @@ export default function GaugesPanel({
 
           if (p.startsWith(`possession ${opp}`)) possAdv++;
 
-          const isButOpp = rOpp.startsWith(`but ${opp}`) ;
+          const isButOpp = rOpp.startsWith(`but ${opp}`) || rOpp.startsWith(`7m obtenu ${opp}`) || (s.startsWith("2")) || s.startsWith("cr");
           const isTirOpp = rOpp.startsWith("tir ") && rOpp.includes(`${opp}`);
           if (isButOpp) butsRecus++;
 
@@ -335,7 +336,7 @@ export default function GaugesPanel({
             supPoss = 0, butsSup = 0,
             infPoss = 0, butsInf = 0,
             tirsDuel = 0, butsDuel = 0,
-            butsGE = 0;
+            butsGE = 0, butsglobal = 0, butstir=0;
 
         evts.forEach((e) => {
           const a   = norm(e?.nom_action);
@@ -378,11 +379,14 @@ export default function GaugesPanel({
           const isShotAny = rTeam.startsWith("tir ") || rTeam.startsWith(`but ${team}`);
           if (!seven && isShotAny) {
             tirsH7++;
-            if ( effbut || (s.startsWith("2")) || s.startsWith("cr")) butsH7++;
+            if (rTeam.startsWith(`but ${team}`)) butsH7++;
+          }  
+          if (isAP || isGE || seven) {
+            if (effbut || (s.startsWith("2")) || s.startsWith("cr")) butsglobal++;
           }
-
           if (isAP) {
             if ( effbut || ((s.startsWith("2")) || s.startsWith("cr"))) butsAP++;
+            if (rTeam.startsWith(`but ${team}`)) butstir++;
             if (isShotAny && !seven) {
               tirsAP++;
               if (inDuelZone) {
@@ -399,15 +403,15 @@ export default function GaugesPanel({
 
           if (isGE && (effbut || (s.startsWith("2")) || s.startsWith("cr"))) butsGE++;
 
-          if (teamSup && (effbut || (s.startsWith("2"))|| s.startsWith("cr"))) butsSup++;
-          if (teamInf && (effbut || (s.startsWith("2")) || s.startsWith("cr"))) butsInf++;
+          if (teamSup && (effbut || ((s.startsWith("2"))|| s.startsWith("cr")))) butsSup++;
+          if (teamInf && (effbut || ((s.startsWith("2")) || s.startsWith("cr")))) butsInf++;
         });
 
-        L["Eff. Globale"] = { num: butsH7 + buts7m, den: poss,   pct: poss   > 0 ? ((butsH7 + buts7m) / poss)   * 100 : 0 };
+        L["Eff. Globale"] = { num: butsglobal, den: poss,   pct: poss   > 0 ? ((butsglobal) / poss)   * 100 : 0 };
         L["Eff. Attaque Placée"] = { num: butsAP,   den: possAP, pct: possAP > 0 ? (butsAP / possAP) * 100 : 0 };
         L["Eff. Grand Espace"]   = { num: butsGE,   den: possGE, pct: possGE > 0 ? (butsGE / possGE) * 100 : 0 };
         L["Eff. Tirs (hors 7m)"] = { num: butsH7,   den: tirsH7, pct: tirsH7 > 0 ? (butsH7 / tirsH7) * 100 : 0 };
-        L["Tirs en Attaque Placée"] = { num: butsAP, den: tirsAP, pct: tirsAP > 0 ? (butsAP / tirsAP) * 100 : 0 };
+        L["Tirs en Attaque Placée"] = { num: butstir, den: tirsAP, pct: tirsAP > 0 ? (butstir / tirsAP) * 100 : 0 };
         L["Tirs sur 7m"] = { num: buts7m, den: tirs7m, pct: tirs7m > 0 ? (buts7m / tirs7m) * 100 : 0 };
         L["Eff. Supériorité"] = { num: butsSup, den: supPoss, pct: supPoss > 0 ? (butsSup / supPoss) * 100 : 0 };
         L["Eff. Infériorité"] = { num: butsInf, den: infPoss, pct: infPoss > 0 ? (butsInf / infPoss) * 100 : 0 };
