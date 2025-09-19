@@ -378,7 +378,7 @@ export default function GaugesPanel({
           const isShotAny = rTeam.startsWith("tir ") || rTeam.startsWith(`but ${team}`);
           if (!seven && isShotAny) {
             tirsH7++;
-            if ( effbut || (s.startsWith("2"))) butsH7++;
+            if ( effbut || (s.startsWith("2")) || s.startsWith("cr")) butsH7++;
           }
 
           if (isAP) {
@@ -397,10 +397,10 @@ export default function GaugesPanel({
             if (rTeam.startsWith(`but ${team}`)) buts7m++;
           }
 
-          if (isGE && effbut || (s.startsWith("2")) || s.startsWith("cr")) butsGE++;
+          if (isGE && (effbut || (s.startsWith("2")) || s.startsWith("cr"))) butsGE++;
 
-          if (teamSup && effbut || (s.startsWith("2"))|| s.startsWith("cr")) butsSup++;
-          if (teamInf && effbut || (s.startsWith("2")) || s.startsWith("cr")) butsInf++;
+          if (teamSup && (effbut || (s.startsWith("2"))|| s.startsWith("cr"))) butsSup++;
+          if (teamInf && (effbut || (s.startsWith("2")) || s.startsWith("cr"))) butsInf++;
         });
 
         L["Eff. Globale"] = { num: butsH7 + buts7m, den: poss,   pct: poss   > 0 ? ((butsH7 + buts7m) / poss)   * 100 : 0 };
