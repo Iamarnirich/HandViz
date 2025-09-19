@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useMemo } from "react";
-
-
 import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
 import EventTypePieChart from "@/components/dashboard/EventTypePieChart";
 import UtilisationSecteursChart from "@/components/dashboard/UtilisationSecteursChart";
@@ -15,12 +13,11 @@ import GaugesPanel from "@/components/dashboard/GaugesPanel";
 import ImpactGrid from "@/components/dashboard/ImpactGrid";
 import EnclenchementsTable from "@/components/dashboard/EnclenchementsTable";
 import PlayerReportsPanel from "@/components/dashboard/PlayerReportsPanel";
-
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
 import { MatchProvider, useMatch } from "@/contexts/MatchContext";
 
-// Convertit un lien Drive (view ou ?id=) en lien direct /uc?id=...
+// fonction pour convertir un lien Drive (view ou ?id=) en lien direct /uc?id=...
 function driveToDirect(url) {
   if (!url) return url;
   try {
@@ -45,14 +42,14 @@ function DashboardLayout() {
   const [clubs, setClubs] = useState({});
   const [joueuses, setJoueuses] = useState([]);
   const [joueuseId, setJoueuseId] = useState(null);
-  const [gardienId, setGardienId] = useState(null); // ✅ nouvel état gardien
+  const [gardienId, setGardienId] = useState(null); 
   const [matchId, setMatchIdLocal] = useState(null);
-  const [selectedTeam, setSelectedTeam] = useState("USDK"); // ✅ sélecteur d'équipe
+  const [selectedTeam, setSelectedTeam] = useState("USDK"); 
   const { rapport, setRapport } = useRapport();
   const [loading, setLoading] = useState(true);
   const [showHistorique, setShowHistorique] = useState(false);
   const [jeLinks, setJeLinks] = useState([]);
-  const shouldHideDashboard = !selectedTeam && !matchId; // équipe vide + match = "all"
+  const shouldHideDashboard = !selectedTeam && !matchId; 
 
 
   const {
@@ -315,7 +312,9 @@ function DashboardLayout() {
     offenseField = isHome ? "resultat_cthb" : "resultat_limoges";
     defenseField = isHome ? "resultat_limoges" : "resultat_cthb";
   }
-  
+    // Afficher le rapport individuel UNIQUEMENT si l’équipe sélectionnée est USDK
+  const isUSDKSelected = (selectedTeam || "").trim().toLowerCase() === "usdk";
+
 
   if (loading) {
     return (
@@ -671,7 +670,7 @@ function DashboardLayout() {
           )}
 
           {/* ===== Rapport individuel ===== */}
-          {!showHistorique && rapport === "individuel" && (
+          {!showHistorique && rapport === "individuel" && isUSDKSelected && (
             <>
               <div className="flex justify-center mb-4">
                 <select

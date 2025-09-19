@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",   
+  output: "standalone",   // ⚡ indispensable pour ton Dockerfile multi-stage
 
   images: {
     formats: ["image/avif", "image/webp"],
@@ -10,6 +10,11 @@ const nextConfig = {
         protocol: "https",
         hostname: "www.lnh.fr",
         pathname: "/medias/sports_teams/**",
+      },
+      {
+        protocol: "https",
+        hostname: "www.lnh.fr",
+        pathname: "/medias/sports_players/**",
       },
       // Google Drive (uc?id=...)
       {

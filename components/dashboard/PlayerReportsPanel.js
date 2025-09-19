@@ -9,7 +9,7 @@ import "react-circular-progressbar/dist/styles.css";
 
 function Card({ title, children }) {
   return (
-    <div className="bg-[#F7D577] rounded-2xl px-4 py-3 shadow text-[#1a1a1a]">
+    <div className="bg-white rounded-2xl px-4 py-3 shadow text-[#1a1a1a]">
       <p className="text-sm font-semibold mb-2">{title}</p>
       <div className="text-center">{children}</div>
     </div>
@@ -47,16 +47,16 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
   const kpi = useMemo(() => {
     if (!joueur) return null;
 
-    const norm = (s) => (s || "").toLowerCase().trim();
-    const teamName = (joueur.equipe || "").trim();
-    const team = teamName || match?.equipe_locale || "";
-    const opp =
-      match && team
-        ? (norm(team) === norm(match.equipe_locale)
-            ? match.equipe_visiteuse
-            : match.equipe_locale) || ""
-        : "";
+    // normalisation (accents/casse/espaces)
+    const norm = (s) =>
+      (s || "")
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
 
+    // 1) récupérer les événements du joueur via la table pivot
     const evtIdSet = new Set(
       (jeLinks || [])
         .filter((l) => String(l.id_joueuse) === String(joueur.id))
@@ -64,7 +64,51 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
     );
     const playerEvents = (events || []).filter((e) => evtIdSet.has(e.id));
 
-    let passesDec = 0;
+    // 2) passes décisives : uniquement la colonne evenements.passe_decisive
+    const playerNameNorm = norm(joueur.nom);
+    const splitAssistants = (raw) =>
+      norm(raw)
+        .split(/[,;&/+\-|•·]|(?:\bet\b)/g)
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+    const passesDec = (events || []).reduce((acc, e) => {
+      const assistants = splitAssistants(e?.passe_decisive || "");
+      if (!assistants.length) return acc;
+      return acc + (assistants.some((n) => n === playerNameNorm) ? 1 : 0);
+    }, 0);
+
+    // 3) EFFICACITÉS — uniquement à partir de resultat_cthb,
+    //    sur les événements du joueur (playerEvents)
+    let attemptsAll = 0;
+    let goalsAll = 0;
+    let attempts7m = 0;
+    let goals7m = 0;
+
+    playerEvents.forEach((e) => {
+      const r = norm(e?.resultat_cthb);
+      const sect = norm(e?.secteur);
+      const na = norm(e?.nom_action);
+
+      const isAttempt = r.startsWith("tir ") || r.startsWith("but ");
+      const isGoal = r.startsWith("but ");
+
+      const is7m = sect.includes("7m") || na.includes("att 7m");
+
+      if (isAttempt) {
+        attemptsAll += 1;
+        if (is7m) attempts7m += 1;
+      }
+      if (isGoal) {
+        goalsAll += 1;
+        if (is7m) goals7m += 1;
+      }
+    });
+
+    const effTot = attemptsAll > 0 ? (goalsAll / attemptsAll) * 100 : 0;
+    const eff7m = attempts7m > 0 ? (goals7m / attempts7m) * 100 : 0;
+
+    // 4) le reste de tes KPI reste inchangé (si tu n’en as pas besoin, tu peux les retirer)
     let attPosAP = 0,
       attPosGE = 0,
       attNegAP = 0,
@@ -72,100 +116,71 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
     let tirAP = 0,
       butAP = 0,
       tirGE = 0,
-      butGE = 0,
-      tir7 = 0,
-      but7 = 0;
+      butGE = 0;
 
     let defPos = 0,
       defNeg = 0,
       pertesAdv = 0;
 
-    const isAP = (a) => norm(a).startsWith(`attaque ${norm(team)}`);
+    const isAP = (a) => norm(a).startsWith("attaque ");
     const isGE = (a) =>
-      ["ca ", "er ", "mb ", "transition "].some((p) =>
-        norm(a).startsWith(p + norm(team))
-      );
+      ["ca ", "er ", "mb ", "transition "].some((p) => norm(a).startsWith(p));
 
     playerEvents.forEach((e) => {
       const a = norm(e?.nom_action);
-      const rc = norm(e?.resultat_cthb);
-      const rl = norm(e?.resultat_limoges);
+      const r = norm(e?.resultat_cthb);
       const sect = norm(e?.secteur);
-      const poss = norm(e?.possession);
 
-      const t = norm(team);
-      const o = norm(opp);
+      const ap = isAP(e?.nom_action);
+      const ge = isGE(e?.nom_action);
+      const is7 = sect.includes("7m");
+      const isShot = r.startsWith("tir ") || r.startsWith("but ");
 
-      const attackTeamEvt =
-        (t && (a.includes(` ${t}`) || rc.includes(` ${t}`))) ||
-        (poss && poss.startsWith(`possession ${t}`));
-
-      const defendTeamEvt =
-        (o && (a.includes(` ${o}`) || rl.includes(` ${o}`))) ||
-        (poss && poss.startsWith(`possession ${o}`));
-
-      if (attackTeamEvt) {
-        const ap = isAP(e?.nom_action);
-        const ge = isGE(e?.nom_action);
-        const isShot = rc.startsWith("tir ") || rc.startsWith(`but ${t}`);
-        const is7m = sect.includes("7m");
-
-        if (ap) {
-          if (isShot && !is7m) tirAP++;
-          if (rc.startsWith(`but ${t}`) && !is7m) butAP++;
-          if (rc.startsWith(`7m obtenu ${t}`) || rc.startsWith(`but ${t}`))
-            attPosAP++;
-          if (
-            rc.includes("perte de balle") ||
-            rc.includes("tir hc") ||
-            rc.includes("arrêt")
-          )
-            attNegAP++;
-          if (rc.startsWith(`but ${t}`)) passesDec++;
-        }
-
-        if (ge) {
-          if (isShot && !is7m) tirGE++;
-          if (rc.startsWith(`but ${t}`) && !is7m) butGE++;
-          if (rc.startsWith(`7m obtenu ${t}`) || rc.startsWith(`but ${t}`))
-            attPosGE++;
-          if (
-            rc.includes("perte de balle") ||
-            rc.includes("tir hc") ||
-            rc.includes("arrêt")
-          )
-            attNegGE++;
-        }
-
-        if (is7m) {
-          tir7++;
-          if (rc.startsWith(`but ${t}`)) but7++;
-        }
+      if (ap) {
+        if (isShot && !is7) tirAP++;
+        if (r.startsWith("but ") && !is7) butAP++;
+        if (r.startsWith("7m obtenu ") || r.startsWith("but ")) attPosAP++;
+        if (
+          r.includes("perte de balle") ||
+          r.includes("tir hc") ||
+          r.includes("arret") ||
+          r.includes("arrêt")
+        )
+          attNegAP++;
       }
 
-      if (defendTeamEvt) {
-        if (rl.startsWith(`but ${o}`)) {
-          defNeg++;
-        } else if (
-          rl.includes("tir hc") ||
-          rl.includes("arrêt") ||
-          rl.includes("contré") ||
-          rl.includes("neutralisation") ||
-          rl.includes("récupération")
-        ) {
-          defPos++;
-          if (rl.includes("récupération")) pertesAdv++;
-        }
+      if (ge) {
+        if (isShot && !is7) tirGE++;
+        if (r.startsWith("but ") && !is7) butGE++;
+        if (r.startsWith("7m obtenu ") || r.startsWith("but ")) attPosGE++;
+        if (
+          r.includes("perte de balle") ||
+          r.includes("tir hc") ||
+          r.includes("arret") ||
+          r.includes("arrêt")
+        )
+          attNegGE++;
+      }
+
+      // Défense (garde ta logique si tu l’utilises ailleurs)
+      if (r.startsWith("but ")) {
+        defNeg++;
+      } else if (
+        r.includes("tir hc") ||
+        r.includes("arret") ||
+        r.includes("arrêt") ||
+        r.includes("contre") ||
+        r.includes("contré") ||
+        r.includes("neutralisation") ||
+        r.includes("recuperation") ||
+        r.includes("récupération")
+      ) {
+        defPos++;
+        if (r.includes("recuperation") || r.includes("récupération"))
+          pertesAdv++;
       }
     });
 
-    const effTot = (() => {
-      const tirsProxy = tirAP + tirGE + tir7;
-      const butsProxy = butAP + butGE + but7;
-      return tirsProxy > 0 ? (butsProxy / tirsProxy) * 100 : 0;
-    })();
-
-    const eff7m = tir7 > 0 ? (but7 / tir7) * 100 : 0;
     const effAP = tirAP > 0 ? (butAP / tirAP) * 100 : 0;
     const effGE = tirGE > 0 ? (butGE / tirGE) * 100 : 0;
 
@@ -182,6 +197,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
               ? (attPosAP + attPosGE) / Math.max(1, attNegAP + attNegGE)
               : 0,
         },
+        // ✅ jauges corrigées
         gauges: { effTot, eff7m, effAP, effGE },
       },
       defensif: {
@@ -201,7 +217,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
 
   return (
     <div className="w-full max-w-5xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <div className="bg-[#3B3B3B] text-white rounded-[28px] p-6">
+      <div className="bg-[#b3974e] text-white rounded-[28px] p-6">
         <h3 className="text-center text-lg font-semibold mb-6">
           Rapport offensif
         </h3>
@@ -228,7 +244,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
               {kpi?.offensif.actionsPos.total || 0}
             </div>
             <div className="text-xs mt-1 text-gray-700">
-              Att Pla {kpi?.offensif.actionsPos.ap || 0}
+              AP {kpi?.offensif.actionsPos.ap || 0}
             </div>
             <div className="text-xs text-gray-700">
               GE {kpi?.offensif.actionsPos.ge || 0}
@@ -239,7 +255,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
               {kpi?.offensif.actionsNeg.total || 0}
             </div>
             <div className="text-xs mt-1 text-gray-700">
-              Att Pla {kpi?.offensif.actionsNeg.ap || 0}
+              AP {kpi?.offensif.actionsNeg.ap || 0}
             </div>
             <div className="text-xs text-gray-700">
               GE {kpi?.offensif.actionsNeg.ge || 0}

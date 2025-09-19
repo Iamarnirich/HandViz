@@ -236,10 +236,10 @@ async function ensureClubByName(nom) {
   return created.id;
 }
 
-/** ===== AJOUT : pose de flags sur joueuses_evenements si requis ===== */
 async function lierJoueuseEtEvenement(id_evenement, nom, poste, equipe, flags = {}) {
   if (!nom || !id_evenement) return;
 
+  // 1) S’assurer que la joueuse existe
   let { data: joueuse } = await supabase
     .from("joueuses")
     .select("id")
@@ -250,7 +250,7 @@ async function lierJoueuseEtEvenement(id_evenement, nom, poste, equipe, flags = 
     const { data: newJoueuse, error } = await supabase
       .from("joueuses")
       .insert({ nom, poste, equipe })
-      .select()
+      .select("id")
       .single();
     if (error) {
       console.warn("Insertion joueuse échouée:", nom, error?.message);
@@ -259,36 +259,43 @@ async function lierJoueuseEtEvenement(id_evenement, nom, poste, equipe, flags = 
     joueuse = newJoueuse;
   }
 
+  // 2) Lire un éventuel lien existant
   const { data: link } = await supabase
     .from("joueuses_evenements")
-    .select("id")
+    .select("id, nom_joueuse, joueur_minus_cthb, joueur_minus_cthb_prime, joueur_plus_cthb, joueur_plus_adv_prime")
     .match({ id_evenement, id_joueuse: joueuse.id })
     .maybeSingle();
 
+  // 3) Construire le "patch" en TEXT (écrire le nom, pas un booléen)
   const patch = {};
-  if (flags.minuscthb)      patch.joueur_minus_cthb = true;
-  if (flags.minuscthbPrime) patch.joueur_minus_cthb_prime = true;
-  if (flags.pluscthb)       patch.joueur_plus_cthb = true;
-  if (flags.plusadvPrime)   patch.joueur_plus_adv_prime = true;
+  if (flags.minuscthb)      patch.joueur_minus_cthb       = nom;
+  if (flags.minuscthbPrime) patch.joueur_minus_cthb_prime = nom;
+  if (flags.pluscthb)       patch.joueur_plus_cthb        = nom;
+  if (flags.plusadvPrime)   patch.joueur_plus_adv_prime   = nom;
 
   if (!link) {
+    // Créer le lien avec les champs texte
     const insertObj = {
       id_evenement,
       id_joueuse: joueuse.id,
-      nom_joueuse: nom,
-      ...patch,
+      nom_joueuse: nom,       // TEXT
+      ...patch,               // TEXT (met le nom si flag présent)
     };
     const { error: linkErr } = await supabase
       .from("joueuses_evenements")
       .insert(insertObj);
     if (linkErr) console.warn("Lien joueuses_evenements échoué:", linkErr?.message);
-  } else if (Object.keys(patch).length > 0) {
-    await supabase
+  } else {
+    // Mettre à jour au besoin (on réécrit la valeur par sécurité)
+    const updateObj = { nom_joueuse: nom, ...patch };
+    const { error: updErr } = await supabase
       .from("joueuses_evenements")
-      .update(patch)
+      .update(updateObj)
       .eq("id", link.id);
+    if (updErr) console.warn("MàJ joueuses_evenements échouée:", updErr?.message);
   }
 }
+
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();

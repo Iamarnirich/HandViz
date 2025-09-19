@@ -21,7 +21,7 @@ const OBJECTIFS = {
     "Buts marqués": "32",
     "Pertes de balle": "<10",
     "Tirs ratés": "12-13",
-    "Tirs total": "55",
+    "Tirs total": "45",
     Neutralisations: "<17",
     "2 Min obtenues": "3",
     "7 m obtenus": "5",
