@@ -33,7 +33,7 @@ const pickOppResult = (e, team) => {
 // classification stricte (uniquement si le résultat mentionne explicitement l'adversaire)
 const isGoal  = (r, adv) => adv ? r.startsWith(`but ${adv}`) : false;
 const isSave  = (r, adv) =>
-  adv ? (/(tir\s+arr[eé]t[ée]?|tir\s+arret|tir\s+contr[ée]?)/.test(r) && r.includes(` ${adv}`)) : false;
+  adv ? (/(tir\s+arr[eé]t[ée]?|tir\s+arret?)/.test(r) && r.includes(` ${adv}`)) : false;
 const isMiss  = (r, adv) =>
   adv ? (/(tir\s+hc|hors[-\s]?cadre)/.test(r) && r.includes(` ${adv}`)) : false;
 
