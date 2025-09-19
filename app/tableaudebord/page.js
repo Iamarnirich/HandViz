@@ -85,7 +85,7 @@ function DashboardLayout() {
 
       const { data: jeData } = await supabase
         .from("joueuses_evenements")
-        .select("id, id_evenement, id_joueuse, nom_joueuse")
+        .select("id, id_evenement, id_joueuse, nom_joueuse,joueur_plus_cthb,joueur_minus_cthb,joueur_minus_cthb_prime")
         .range(0, 20000);
       setJeLinks(jeData || []);
 

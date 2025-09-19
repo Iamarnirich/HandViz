@@ -49,6 +49,7 @@ export default function TimelineChart({ data }) {
       const resCTHB = norm(e?.resultat_cthb);
       const resLIM = norm(e?.resultat_limoges);
       const nom = norm(e?.nom_action);
+      const s = norm(e?.sanctions);
       const minute = extractMinuteFromMillis(e?.position);
       if (Number.isNaN(minute) || minute < 0 || minute > 60) return;
 
@@ -93,12 +94,12 @@ export default function TimelineChart({ data }) {
       if (
         resCTHB.includes("exclusion") ||
         resLIM.includes("exclusion") ||
-        resCTHB.includes("2' obtenu") ||
-        resLIM.includes("2' obtenu")
+        s.startsWith("2") ||
+        s.includes("2")
       ) {
         evts.push({ type: "exclusion", minute });
       }
-      if (resCTHB.includes("carton rouge") || resLIM.includes("carton rouge")) {
+      if (s.startsWith("cr") || resLIM.startsWith("cr")) {
         evts.push({ type: "rouge", minute });
       }
     });
