@@ -17,6 +17,7 @@ const secteurs = {
   ARD: { top: "55%", left: "85%" },
   ARG: { top: "55%", left: "15%" },
   "7M": { label: "7m", top: "80%", left: "50%" },
+  "But Vide": { label: "But vide", top: "80%", left: "75%" }, // ✅ nouveau secteur
 };
 
 const norm = (s) => (s || "").toString().toLowerCase().trim();
@@ -24,6 +25,7 @@ const norm = (s) => (s || "").toString().toLowerCase().trim();
 function canonicalizeSecteur(raw) {
   const s = norm(raw);
   if (s === "7m") return "7M";
+  if (s === "but vide") return "But Vide"; // ✅ mapping explicite
   const found = Object.keys(secteurs).find((k) => norm(k) === s);
   return found || (raw || "");
 }
@@ -166,57 +168,45 @@ export default function TerrainHandball({
   }, [data, rapport, isTousLesMatchs, equipeLocale, teamName, offenseField, defenseField]);
 
   // Couleurs Tailwind : rouge / orange / vert
-function getColor(secteurKey, eff) {
-  const k = (secteurKey || "").toLowerCase();
+  function getColor(secteurKey, eff) {
+    const k = (secteurKey || "").toLowerCase();
+    const inRange = (x, a, b) => x >= a && x < b; // [a, b)
 
-  const inRange = (x, a, b) => x >= a && x < b; // intervalle [a, b)
-
-  // ALD & ALG : orange 70–75, <70 rouge, >75 vert
-  if (k === "ald" || k === "alg") {
-    if (inRange(eff, 70, 75)) return "bg-[#FFD4A1]";
-    if (eff > 75) return "bg-[#9FCDA8]";
-    return "bg-[#FFBFB0]";
+    if (k === "ald" || k === "alg") {
+      if (inRange(eff, 70, 75)) return "bg-[#FFD4A1]";
+      if (eff > 75) return "bg-[#9FCDA8]";
+      return "bg-[#FFBFB0]";
+    }
+    if (k === "central 6m") {
+      if (inRange(eff, 75, 80)) return "bg-[#FFD4A1]";
+      if (eff > 80) return "bg-[#9FCDA8]";
+      return "bg-[#FFBFB0]";
+    }
+    if (k === "1-2d" || k === "1-2g") {
+      if (inRange(eff, 65, 70)) return "bg-[#FFD4A1]";
+      if (eff > 70) return "bg-[#9FCDA8]";
+      return "bg-[#FFBFB0]";
+    }
+    if (k === "ard" || k === "arg" || k === "central 9m") {
+      if (inRange(eff, 50, 55)) return "bg-[#FFD4A1]";
+      if (eff > 55) return "bg-[#9FCDA8]";
+      return "bg-[#FFBFB0]";
+    }
+    if (k === "7m") {
+      if (inRange(eff, 80, 85)) return "bg-[#FFD4A1]";
+      if (eff > 85) return "bg-[#9FCDA8]";
+      return "bg-[#FFBFB0]";
+    }
+    if (k === "central 7-9m") {
+      if (inRange(eff, 55, 60)) return "bg-[#FFD4A1]";
+      if (eff > 60) return "bg-[#9FCDA8]";
+      return "bg-[#FFBFB0]";
+    }
+    if (k === "but vide") {
+      return "bg-gray-600"; // fallback pour But Vide
+    }
+    return "bg-gray-600";
   }
-
-  // Central 6m : orange 75–80, <75 rouge, >80 vert
-  if (k === "central 6m") {
-    if (inRange(eff, 75, 80)) return "bg-[#FFD4A1]";
-    if (eff > 80) return "bg-[#9FCDA8]";
-    return "bg-[#FFBFB0]";
-  }
-
-  // 1-2D & 1-2G : orange 65–70, <65 rouge, >70 vert
-  if (k === "1-2d" || k === "1-2g") {
-    if (inRange(eff, 65, 70)) return "bg-[#FFD4A1]";
-    if (eff > 70) return "bg-[#9FCDA8]";
-    return "bg-[#FFBFB0]";
-  }
-
-  // ARD, ARG, Central 9m : orange 50–55, <50 rouge, >55 vert
-  if (k === "ard" || k === "arg" || k === "central 9m") {
-    if (inRange(eff, 50, 55)) return "bg-[#FFD4A1]";
-    if (eff > 55) return "bg-[#9FCDA8]";
-    return "bg-[#FFBFB0]";
-  }
-
-  // 7M : orange 80–85, <80 rouge, >85 vert
-  if (k === "7m") {
-    if (inRange(eff, 80, 85)) return "bg-[#FFD4A1]";
-    if (eff > 85) return "bg-[#9FCDA8]";
-    return "bg-[#FFBFB0]";
-  }
-
-  // Central 7-9m : orange 55–60, <55 rouge, >60 vert
-  if (k === "central 7-9m") {
-    if (inRange(eff, 55, 60)) return "bg-[#FFD4A1]";
-    if (eff > 60) return "bg-[#9FCDA8]";
-    return "bg-[#FFBFB0]";
-  }
-
-  // fallback (si un secteur inconnu arrive)
-  return "bg-gray-600";
-}
-
 
   return (
     <div className="relative w-full h-full max-h-[580px] rounded-xl overflow-hidden shadow-lg border bg-white">
@@ -234,7 +224,6 @@ function getColor(secteurKey, eff) {
         const eff = (s.buts / s.tirs) * 100;
         const bg = getColor(key, eff);
 
-
         return (
           <div
             key={key}
@@ -246,17 +235,13 @@ function getColor(secteurKey, eff) {
               minWidth: "72px",
             }}
           >
-            {/* Label : uniquement pour 7m (dans les deux modes) */}
-            {key === "7M" ? (
+            {/* ✅ Afficher le label si défini (7m & But Vide) */}
+            {"label" in pos && pos.label ? (
               <div className="text-[11px] font-bold leading-tight mb-1">
-                {pos.label || "7m"}
+                {pos.label}
               </div>
             ) : null}
 
-            {/* Affichage : 
-                - Tous les matchs (moyenne) => seulement le %
-                - Mono-match => "buts/tirs - %"
-            */}
             {isTousLesMatchs ? (
               <div className="text-[16px] leading-tight">{Math.round(eff)}%</div>
             ) : (
