@@ -108,6 +108,11 @@ const norm = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
+// --- Helpers sûrs pour éviter les crashs ---
+const EMPTY_CELL = { num: 0, den: 0, pct: 0 };
+const safeRow = (arr, i) => (Array.isArray(arr) && arr[i]) ? arr[i] : {};
+const safeCell = (row, key) => (row && row[key]) ? row[key] : EMPTY_CELL;
+
 const isSevenMEvent = (e) => {
   const clean = (x) =>
     (x || "")
@@ -289,7 +294,6 @@ export default function GaugesPanel({
 
           const isButOpp = rOpp.startsWith(`but ${opp}`) || rOpp.startsWith(`7m obtenu`) || ((s.startsWith("2")) || s.startsWith("cr"));
           const isTirOpp = rOpp.startsWith("tir ") && rOpp.includes(`${opp}`);
-          
 
           const isAP = a.startsWith(`attaque ${opp}`);
           const isGE =
@@ -377,17 +381,19 @@ export default function GaugesPanel({
           const teamInf = nb.includes("inferiorite") || nb.includes("inferiorité") || nb.includes("infériorité");
           if (teamSup && (isAP || isGE)) supPoss++;
           if (teamInf && (isAP || isGE)) infPoss++;
-          const effbut=rTeam.startsWith(`but ${team}`)|| rTeam.startsWith(`7m obtenu ${team}`);
+
+          const effbut = rTeam.startsWith(`but ${team}`) || rTeam.startsWith(`7m obtenu ${team}`);
           const isShotAny = rTeam.startsWith("tir ") || rTeam.startsWith(`but ${team}`);
+
           if (!seven && isShotAny) {
             tirsH7++;
             if (rTeam.startsWith(`but ${team}`)) butsH7++;
-          }  
+          }
           if (isAP || isGE || seven) {
             if (effbut || (s.startsWith("2")) || s.startsWith("cr")) butsglobal++;
           }
           if (isAP) {
-            if ( effbut || ((s.startsWith("2")) || s.startsWith("cr"))) butsAP++;
+            if (effbut || ((s.startsWith("2")) || s.startsWith("cr"))) butsAP++;
             if (rTeam.startsWith(`but ${team}`)) butstir++;
             if (isShotAny && !seven) {
               tirsAP++;
@@ -409,7 +415,7 @@ export default function GaugesPanel({
           if (teamInf && (effbut || ((s.startsWith("2")) || s.startsWith("cr")))) butsInf++;
         });
 
-        L["Eff. Globale"] = { num: butsglobal, den: poss,   pct: poss   > 0 ? ((butsglobal) / poss)   * 100 : 0 };
+        L["Eff. Globale"] = { num: butsglobal, den: poss,   pct: poss   > 0 ? (butsglobal / poss)   * 100 : 0 };
         L["Eff. Attaque Placée"] = { num: butsAP,   den: possAP, pct: possAP > 0 ? (butsAP / possAP) * 100 : 0 };
         L["Eff. Grand Espace"]   = { num: butsGE,   den: possGE, pct: possGE > 0 ? (butsGE / possGE) * 100 : 0 };
         L["Eff. Tirs (hors 7m)"] = { num: butsH7,   den: tirsH7, pct: tirsH7 > 0 ? (butsH7 / tirsH7) * 100 : 0 };
@@ -424,33 +430,40 @@ export default function GaugesPanel({
       labelsOrder.forEach((lb) => {
         const x = L[lb];
         if (!x) return;
-        x.num = Math.max(0, x.num);
-        x.den = Math.max(0, x.den);
-        x.pct = x.den > 0 ? Math.min(100, Math.max(0, x.pct)) : 0;
+        x.num = Math.max(0, Number(x.num) || 0);
+        x.den = Math.max(0, Number(x.den) || 0);
+        x.pct = x.den > 0 ? Math.min(100, Math.max(0, Number(x.pct) || 0)) : 0;
       });
 
       return L;
     });
 
+    // ===== Sortie robuste (mono / multi / aucun match) =====
     const out = labelsOrder.map((label) => {
+      if (!effectiveMatchCount || !Array.isArray(perMatch) || perMatch.length === 0) {
+        return { label, value: 0, count: `0/0`, color: getGaugeColor(label, 0, rapport) };
+      }
+
       if (effectiveMatchCount === 1) {
-        const only = perMatch[0][label] || { num: 0, den: 0, pct: 0 };
+        const only = safeCell(safeRow(perMatch, 0), label);
+        const v = isNaN(only.pct) ? 0 : only.pct;
         return {
           label,
-          value: isNaN(only.pct) ? 0 : only.pct,
-          count: `${only.num}/${only.den}`,
-          color: getGaugeColor(label, only.pct, rapport),
-        };
-      } else {
-        const series = perMatch.map((m) => m[label] || { num: 0, den: 0, pct: 0 });
-        const { pct, num, den } = avgPctAndCount(series);
-        return {
-          label,
-          value: isNaN(pct) ? 0 : pct,
-          count: `${num.toFixed(1)}/${den.toFixed(1)}`,
-          color: getGaugeColor(label, pct, rapport),
+          value: v,
+          count: `${only.num ?? 0}/${only.den ?? 0}`,
+          color: getGaugeColor(label, v, rapport),
         };
       }
+
+      const series = perMatch.map((m) => safeCell(m, label));
+      const { pct, num, den } = avgPctAndCount(series);
+      const v = isNaN(pct) ? 0 : pct;
+      return {
+        label,
+        value: v,
+        count: `${(num ?? 0).toFixed(1)}/${(den ?? 0).toFixed(1)}`,
+        color: getGaugeColor(label, v, rapport),
+      };
     });
 
     return out;
