@@ -234,7 +234,6 @@ function DashboardLayout() {
   const scoreLocal = getScore(true);
   const scoreVisiteur = getScore(false);
 
-  // Listes joueuses/gardiens pour le match (logique existante conservée)
   const isIndividuel = rapport === "individuel";
   const joueusesFiltered = useMemo(() => {
     if (matchId != null && selectedMatch) {
@@ -256,7 +255,13 @@ function DashboardLayout() {
     );
   }, [joueuses, isIndividuel, matchId, selectedMatch]);
 
+    // Gardiens : même logique que "individuel" → n'afficher que les GB de l'USDK
   const gardiensFiltered = useMemo(() => {
+    if (norm(selectedTeam) === "usdk") {
+      return (joueuses || []).filter(
+        (j) => norm(j.equipe) === "usdk" && String(j.poste || "").toUpperCase() === "GB"
+      );
+    }
     if (matchId != null && selectedMatch) {
       return (joueuses || []).filter(
         (j) =>
@@ -265,8 +270,12 @@ function DashboardLayout() {
           String(j.poste || "").toUpperCase() === "GB"
       );
     }
-    return (joueuses || []).filter((j) => String(j.poste || "").toUpperCase() === "GB");
-  }, [joueuses, matchId, selectedMatch]);
+
+    return (joueuses || []).filter(
+      (j) => String(j.poste || "").toUpperCase() === "GB"
+    );
+  }, [joueuses, matchId, selectedMatch, selectedTeam]);
+
 
   const selectedJoueuse = useMemo(
     () => (joueuseId == null ? null : (joueuses || []).find((j) => toIdKey(j.id) === toIdKey(joueuseId))) || null,
@@ -777,7 +786,7 @@ function DashboardLayout() {
           )}
 
           {/* ===== Rapport gardien ===== */}
-          {rapport === "gardien" && (
+          {rapport === "gardien" && isUSDKSelected && (
             <>
               <div className="flex justify-center mb-4">
                 <select
@@ -788,7 +797,7 @@ function DashboardLayout() {
                   <option value="">Sélectionner un gardien</option>
                   {gardiensFiltered.map((g) => (
                     <option key={g.id} value={toIdKey(g.id)}>
-                      {g.nom} {g.equipe ? `(${g.equipe})` : ""}
+                      {g.nom}
                     </option>
                   ))}
                 </select>
@@ -810,6 +819,7 @@ function DashboardLayout() {
               )}
             </>
           )}
+
         </>
       )}
 
