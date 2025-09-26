@@ -297,7 +297,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
         : ge_actionsPos > 0
         ? ge_actionsPos
         : 0;
-    
+
     const ratioGlobal =ratioAP + ratioGE;
 
     const effTotVal = attemptsAll > 0 ? (goalsAll / attemptsAll) * 100 : 0;

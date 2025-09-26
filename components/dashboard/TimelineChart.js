@@ -59,9 +59,7 @@ export default function TimelineChart({ data }) {
         max = Math.max(max, timeline[minute][key]);
       };
 
-      // ---------- Buts offensifs (équipe analysée)
-      // Mono-match: compter les buts de l'équipe locale sélectionnée
-      // Tous les matchs: on ne borne pas à une équipe → on compte tout but (cohérent avec le reste de tes composants)
+      
       const isOffensiveGoal = isTousLesMatchs
         ? resCTHB.startsWith("but ") || resLIM.startsWith("but ")
         : (!!eqLocal &&
@@ -74,7 +72,7 @@ export default function TimelineChart({ data }) {
         }
       }
 
-      // ---------- Buts défensifs (adverse)
+     
       const isDefensiveGoal = isTousLesMatchs
         ? resCTHB.startsWith("but ") || resLIM.startsWith("but ")
         : (!!eqAdv &&
@@ -87,7 +85,7 @@ export default function TimelineChart({ data }) {
         }
       }
 
-      // ---------- Marqueurs d'événements (inchangé)
+      
       if (resCTHB.includes("tto") || resLIM.includes("tto")) {
         evts.push({ type: "tto", minute });
       }

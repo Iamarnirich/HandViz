@@ -48,7 +48,7 @@ export default function EnclenchementsTable({
     return sorted[0]?.[0] || "";
   };
 
-  // ✅ NOUVEAU : déduire le nom de l’adversaire sur un match
+  
   const inferOpponentForMatch = (events, team) => {
     const cnt = new Map();
     const bump = (name) => {
@@ -67,11 +67,11 @@ export default function EnclenchementsTable({
     return arr[0]?.[0] || "";
   };
 
-  // mono-match : on respecte les champs fournis par le parent
+  
   const pickOffResSingle = (e) => norm(e?.[offenseField]);
   const pickDefResSingle = (e) => norm(e?.[defenseField]);
 
-  // tous-matchs : côté par évènement (selon team détectée)
+  
   const pickOffResMulti = (e, team) => {
     const rc = norm(e?.resultat_cthb);
     const rl = norm(e?.resultat_limoges);
@@ -124,7 +124,6 @@ export default function EnclenchementsTable({
 
     const equipeRef = norm(teamName || equipeLocale);
 
-    // ===== MONO-MATCH =====
     if (!isTousLesMatchs) {
       const parEncl = new Map();
       const team = inferTeamForMatch(data, equipeRef);
@@ -136,11 +135,10 @@ export default function EnclenchementsTable({
         if (!team) return false;
         return rapport === "offensif"
           ? a.startsWith(`attaque ${team}`)
-          : a.startsWith(`attaque ${opp}`); // ✅ l’adversaire attaque en défensif
+          : a.startsWith(`attaque ${opp}`); 
       };
 
-      // ✅ Offensif : succès de notre équipe
-      // ✅ Défensif : succès de l’ADVERSAIRE (même règle), PAS d’inversion
+      
       const successOf = (evt) => {
         if (rapport === "offensif") {
           const rOff = pickOffResSingle(evt);
@@ -179,7 +177,6 @@ export default function EnclenchementsTable({
       return rows;
     }
 
-    // ===== TOUS LES MATCHS =====
     const byMatch = new Map();
     (data || []).forEach((evt) => {
       const id = evt?.id_match || "_unknown";
@@ -223,8 +220,8 @@ export default function EnclenchementsTable({
           const rOff = pickOffResMulti(evt, team);
           return isOffSuccess(rOff, team);
         }
-        const rOpp = pickDefResMulti(evt, team); // ✅ côté opposé au nôtre
-        return isOffSuccess(rOpp, opp);          // ✅ même règle appliquée à l’adversaire
+        const rOpp = pickDefResMulti(evt, team); 
+        return isOffSuccess(rOpp, opp);          
       };
 
       const parEncl = new Map();
@@ -252,7 +249,7 @@ export default function EnclenchementsTable({
           const denom = sub.length;
           if (denom > 0) {
             const num = sub.filter(successOf).length;
-            const k = keys[0]; // clé d’accumulation
+            const k = keys[0]; 
             a.focus[k].sumPct += (num / denom) * 100;
             a.focus[k].matches += 1;
             a.focus[k].sumDenom += denom;

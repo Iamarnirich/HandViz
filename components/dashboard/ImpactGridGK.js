@@ -20,9 +20,55 @@ const norm = (s) =>
 const getColor = (eff) => {
   if (eff >= 70) return "bg-[#9FCDA8] text-white";
   if (eff >= 45) return "bg-[#FFD4A1] text-black";
-  if (eff > 0)  return "bg-[#FFBFB0] text-black";
+  if (eff > 0) return "bg-[#FFBFB0] text-black";
   return "bg-[#dfe6e9] text-black";
 };
+
+/** Déduit l’adversaire le plus probable à partir des textes d’événements */
+function inferOppTeam(data, team) {
+  if (!team) return "";
+  const counts = new Map();
+  const bump = (name) => {
+    const k = norm(name);
+    if (!k || k === team) return;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  };
+
+  const rx = /^(but|tir|perte(?:\s+de\s+balle)?|7m\s+obtenu)\s+([^\s]+)/i;
+
+  (data || []).forEach((e) => {
+    const rc = norm(e?.resultat_cthb);
+    const rl = norm(e?.resultat_limoges);
+    const ma = norm(e?.nom_action);
+    const poss = norm(e?.possession);
+
+    [rc, rl].forEach((r) => {
+      const m = r.match(rx);
+      if (m && m[2]) bump(m[2]);
+    });
+
+    const mA = ma.match(/^(attaque|ca|er|mb|transition)\s+([^\s]+)/i);
+    if (mA && mA[2]) bump(mA[2]);
+
+    const mP = poss.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+    if (mP) {
+      const t1 = norm(mP[1]);
+      const t2 = norm(mP[2]);
+      if (t1 === team) bump(t2);
+      if (t2 === team) bump(t1);
+    }
+  });
+
+  let best = "";
+  let max = 0;
+  counts.forEach((v, k) => {
+    if (v > max) {
+      max = v;
+      best = k;
+    }
+  });
+  return best;
+}
 
 export default function ImpactGridGK({ data, gardien }) {
   const stats = useMemo(() => {
@@ -36,35 +82,53 @@ export default function ImpactGridGK({ data, gardien }) {
     };
 
     const gkName = norm(gardien?.nom);
-    if (!gkName) return byImpact;
+    const team = norm(gardien?.equipe);
+    if (!gkName || !team) return byImpact;
+
+    // Adversaire déduit depuis le dataset
+    const opp = inferOppTeam(data, team);
+
+    // Prépare des regex “team-aware” (accents déjà normalisés)
+    const reSaveTeam = new RegExp(`^tir\\s+arrete\\s+${team}$`);
+    const reGoalOpp = opp ? new RegExp(`^but\\s+${opp}$`) : null;
+    const reWideOpp = opp ? new RegExp(`^tir\\s+hc\\s+${opp}$`) : null;
+    const reBlockOpp = opp ? new RegExp(`^tir\\s+(?:contre|contre)\\s+${opp}$`) : null;
 
     (data || []).forEach((e) => {
-      // ✅ Détection gardien robuste (gb_cthb / gb_adv)
+      // 1) L’événement doit concerner CE gardien
       const gkCTHB = norm(e?.gb_cthb);
-      const gkADV  = norm(e?.gb_adv);
+      const gkADV = norm(e?.gb_adv);
       const isThisGK = gkCTHB === gkName || gkADV === gkName;
       if (!isThisGK) return;
 
-      // ✅ Impact avec fallbacks possibles
+      // 2) Impact
       const impact =
         e?.impact ??
         e?.secteur ??
         e?.zone_impact ??
         "";
+      if (!impact) return;
 
-      // Résultats dans les 2 colonnes (minuscule + sans accents)
+      // 3) Lire séparément les deux colonnes de résultat (NE PAS concaténer)
       const rc = norm(e?.resultat_cthb);
       const rl = norm(e?.resultat_limoges);
-      // On fusionne pour chercher facilement les patterns
-      const r = `${rc} | ${rl}`;
 
-      // Set des tirs à prendre en compte pour GK
-      const isSave  = r.includes("tir arrete") || r.includes("tir arrete") || r.includes("tir arrete"); // couvert par la normalisation (arrêté → arrete)
-      const isWide  = r.includes("tir hc");
-      const isBlock = r.includes("tir contre") || r.includes("tir contre");
-      const isGoal  = r.includes("but ") ; // inclut les buts encaissés (l’event porte le nom du GK adverse)
+      // 4) Classement team-aware
+      const colMatches = (txt, re) => !!(txt && re && re.test(txt));
 
-      const isShot = isSave || isWide || isBlock || isGoal;
+      // Arrêt = “tir arreté TEAM”
+      const isSave =
+        colMatches(rc, reSaveTeam) || colMatches(rl, reSaveTeam);
+
+      // But/HC/Contré = côté adversaire
+      const isGoal =
+        (reGoalOpp && (colMatches(rc, reGoalOpp) || colMatches(rl, reGoalOpp))) || false;
+      const isWide =
+        (reWideOpp && (colMatches(rc, reWideOpp) || colMatches(rl, reWideOpp))) || false;
+      const isBlock =
+        (reBlockOpp && (colMatches(rc, reBlockOpp) || colMatches(rl, reBlockOpp))) || false;
+
+      const isShot = isSave || isGoal || isWide || isBlock;
       if (!isShot) return;
 
       add(impact, { isSave, isShot });

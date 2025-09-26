@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import StatGlobalOverview from "@/components/dashboard/StatGlobalOverview";
-import EventTypePieChart from "@/components/dashboard/EventTypePieChart";
+import CamembertChart from "@/components/dashboard/CamembertChart";
 import UtilisationSecteursChart from "@/components/dashboard/UtilisationSecteursChart";
 import ProgressionTirsChart from "@/components/dashboard/ProgressionTirsChart";
 import TimelineChart from "@/components/dashboard/TimelineChart";
@@ -622,7 +622,7 @@ function DashboardLayout() {
                     </div>
 
                     <div className="w-full max-w-4xl mt-6">
-                      <EventTypePieChart
+                      <CamembertChart
                         data={filteredEvents}
                         matchCount={matchCountFiltered}
                         teamName={selectedTeam}
@@ -737,7 +737,7 @@ function DashboardLayout() {
                     </div>
 
                     <div className="w-full max-w-4xl mt-6">
-                      <EventTypePieChart
+                      <CamembertChart
                         data={filteredEvents}
                         matchCount={matchCountFiltered}
                         teamName={selectedTeam}
@@ -835,18 +835,28 @@ function DashboardLayout() {
                     height={160}
                     className="rounded-full shadow border object-cover"
                   />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start"> 
-                    <div className="w-full max-w-5xl mt-[20px]">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-15 items-stretch w-full">
+                    {/* Colonne gauche : tables */}
+                    <div className="w-full h-full mt-[20px]">
                       <ImpactTablesGK data={dataForGKChart} gardien={selectedGardien} />
                     </div>
-                    <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
-                      <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
-                      <div className="w-full max-w-3xl aspect-[3/3]">
-                      <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
+
+                    {/* Colonne droite : grille + terrain */}
+                    <div className="w-full h-full flex flex-col gap-6 mt-[20px]">
+                      <div className="w-full">
+                        <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
+                      </div>
+                      <div className="w-full max-w-2xl aspect-[3/3]">
+                        <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
                       </div>
                     </div>
-                    <EventTypePieChart data={dataForGKChart} />
+
+                    {/* Rangée du bas : Camembert sur toute la largeur (col-span-2) */}
+                    <div className="md:col-span-2 w-full">
+                      <CamembertChart data={dataForGKChart} />
+                    </div>
                   </div>
+
                 </div>
               )}
             </>

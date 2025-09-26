@@ -17,7 +17,7 @@ const secteurs = {
   ARD: { top: "55%", left: "85%" },
   ARG: { top: "55%", left: "15%" },
   "7M": { label: "7m", top: "80%", left: "50%" },
-  "But Vide": { label: "But vide", top: "80%", left: "75%" }, // ✅ nouveau secteur
+  "But Vide": { label: "But vide", top: "80%", left: "75%" }, 
 };
 
 const norm = (s) => (s || "").toString().toLowerCase().trim();
@@ -25,7 +25,7 @@ const norm = (s) => (s || "").toString().toLowerCase().trim();
 function canonicalizeSecteur(raw) {
   const s = norm(raw);
   if (s === "7m") return "7M";
-  if (s === "but vide") return "But Vide"; // ✅ mapping explicite
+  if (s === "but vide") return "But Vide"; 
   const found = Object.keys(secteurs).find((k) => norm(k) === s);
   return found || (raw || "");
 }
@@ -109,7 +109,7 @@ export default function TerrainHandball({
           ? pickOffResult(e, isTousLesMatchs, team, offenseField)
           : pickDefResult(e, isTousLesMatchs, team, defenseField);
 
-      // === 7m : exiger "att 7m <équipe>" + secteur "7M"
+      
       if (secteurKey === "7M") {
         if (!att7mTeam || !team) return;
         const okOff = rapport === "offensif" && att7mTeam === team;
@@ -121,7 +121,7 @@ export default function TerrainHandball({
         return;
       }
 
-      // === Phases acceptées : attaque|transition|mb|ca|er
+      
       let attacker = phaseTeam;
       if (!attacker && poss?.equipe) attacker = poss.equipe;
 
@@ -145,7 +145,7 @@ export default function TerrainHandball({
       add(idMatch, secteurKey, isBut);
     });
 
-    // Agrégation / moyenne par match
+    
     const out = {};
     const mids = Object.keys(perMatch);
     const n = mids.length;
@@ -167,10 +167,10 @@ export default function TerrainHandball({
     return out;
   }, [data, rapport, isTousLesMatchs, equipeLocale, teamName, offenseField, defenseField]);
 
-  // Couleurs Tailwind : rouge / orange / vert
+  
   function getColor(secteurKey, eff) {
     const k = (secteurKey || "").toLowerCase();
-    const inRange = (x, a, b) => x >= a && x < b; // [a, b)
+    const inRange = (x, a, b) => x >= a && x < b; 
 
     if (k === "ald" || k === "alg") {
       if (inRange(eff, 70, 75)) return "bg-[#FFD4A1]";
@@ -203,7 +203,7 @@ export default function TerrainHandball({
       return "bg-[#FFBFB0]";
     }
     if (k === "but vide") {
-      return "bg-gray-600"; // fallback pour But Vide
+      return "bg-gray-600"; 
     }
     return "bg-gray-600";
   }
@@ -235,7 +235,7 @@ export default function TerrainHandball({
               minWidth: "72px",
             }}
           >
-            {/* ✅ Afficher le label si défini (7m & But Vide) */}
+            
             {"label" in pos && pos.label ? (
               <div className="text-[11px] font-bold leading-tight mb-1">
                 {pos.label}
