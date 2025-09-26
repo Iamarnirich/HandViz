@@ -109,7 +109,7 @@ export default function ImpactTablesGK({ data = [], gardien }) {
       {/* === Carte 1 : % réussite par impacts === */}
       <div className="border border-[#E4CDA1] bg-white rounded-xl shadow p-4">
         <h4 className="text-center text-sm font-semibold mb-3 text-[#1a1a1a]">
-          % réussite par impacts (arrêts / tous les tirs)
+          % réussite par impacts
         </h4>
         <div className="grid grid-cols-3 gap-3">
           {stats.rowsEff.flat().map((cell, i) => {
@@ -130,7 +130,7 @@ export default function ImpactTablesGK({ data = [], gardien }) {
       {/* === Carte 2 : Répartition des buts encaissés === */}
       <div className="border border-[#E4CDA1] bg-white rounded-xl shadow p-4">
         <h4 className="text-center text-sm font-semibold mb-3 text-[#1a1a1a]">
-          Répartition des buts encaissés (buts / tous les tirs)
+          Répartition des buts encaissés 
         </h4>
         <div className="grid grid-cols-3 gap-3">
           {stats.rowsConc.flat().map((cell, i) => {
