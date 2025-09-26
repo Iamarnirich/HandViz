@@ -10,7 +10,7 @@ import "react-circular-progressbar/dist/styles.css";
 
 function StatCardShell({ title, children }) {
   return (
-    <div className="border border-[#E4CDA1] rounded-xl shadow p-4 min-h-[130px] flex flex-col justify-between items-center bg-white text-[#1a1a1a]">
+    <div className="border border-[#E4CDA1] rounded-xl shadow p-4 min-w-[150px] min-h-[50px] flex flex-col justify-between items-center bg-white text-[#1a1a1a]">
       <h4 className="text-sm font-semibold">{title}</h4>
       {children}
     </div>
@@ -460,12 +460,12 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-10">
+    <div className="w-full max-w-5xl mx-auto mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* 🔒 Carte offensif inchangée */}
       <div className="bg-[#b3974e] text-white rounded-[28px] p-6">
         <h3 className="text-center text-lg font-semibold mb-6">Rapport offensif</h3>
 
-        <div className="grid grid-cols-2 gap-15 mb-6">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <HalfGauge
             label="Efficacité totale"
             value={kpi?.offensif.gauges.effTot.value || 0}
@@ -480,7 +480,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-15 mb-15">
+        <div className="grid grid-cols-3 gap-2 mb-2">
           <StatCardShell title="Passes décisives">
             <div className="text-2xl font-extrabold text-center">
               {kpi?.offensif.passesDec || 0}
@@ -492,7 +492,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
           <ActionsCard title="Actions Négatives" data={kpi?.offensif.actionsNeg} />
         </div>
 
-        <div className="grid grid-cols-3 gap-15">
+        <div className="grid grid-cols-3 gap-2">
           <StatCardShell title="Perte de balle">
             <div className="text-2xl font-extrabold text-center">
               {kpi?.offensif.pertesBalle || 0}
@@ -520,11 +520,11 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
         </div>
       </div>
 
-      {/* ✅ Carte défensif: alimentée avec les nouveaux calculs */}
+      
       <div className="bg-[#3B3B3B] text-white rounded-[28px] p-6">
-        <h3 className="text-center text-lg font-semibold mb-6">Rapport défensif</h3>
+        <h3 className="text-center text-lg font-semibold mb-2">Rapport défensif</h3>
 
-        <div className="grid grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-3 gap-2 mb-2">
           <StatCardShell title="Actions Positives">
             <div className="text-2xl font-extrabold text-center">
               {kpi?.defensif.actionsPos || 0}
@@ -537,9 +537,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
             </div>
             <div className="h-5" />
           </StatCardShell>
-        </div>
 
-        <div className="grid grid-cols-3 gap-6">
           <StatCardShell title="Ratio Défensif Défense Placée">
             <div className="text-xl font-bold">
               {(kpi?.defensif.ratios.placee || 0).toFixed(1)}
