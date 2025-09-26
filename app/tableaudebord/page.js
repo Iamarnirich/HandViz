@@ -15,6 +15,11 @@ import PlayerReportsPanel from "@/components/dashboard/PlayerReportsPanel";
 import { supabase } from "@/lib/supabaseClient";
 import { RapportProvider, useRapport } from "@/contexts/RapportContext";
 import { MatchProvider, useMatch } from "@/contexts/MatchContext";
+import ImpactGridGK from "@/components/dashboard/ImpactGridGK";
+import TerrainHandballGK from "@/components/dashboard/TerrainHandballGK";
+import ImpactTablesGK from "@/components/dashboard/ImpactTablesGK";
+
+
 
 /* ====== Noms des vues (adapter si besoin) ====== */
 const VIEW_INDIVIDUEL = "v_joueur_match_events";
@@ -812,8 +817,19 @@ function DashboardLayout() {
                     height={160}
                     className="rounded-full shadow border object-cover"
                   />
-                  <div className="w-full max-w-3xl">
-                    <EventTypePieChart data={dataForGKChart} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div className="w-full max-w-3xl">
+                      <EventTypePieChart data={dataForGKChart} />
+                      <div className="w-full max-w-5xl mt-8">
+                      <ImpactTablesGK data={dataForGKChart} gardien={selectedGardien} />
+                    </div>
+                    </div>
+                    <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
+                      <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
+                      <div className="w-full max-w-3xl aspect-[3/3]">
+                      <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
+                    </div>
+                    </div>
                   </div>
                 </div>
               )}
