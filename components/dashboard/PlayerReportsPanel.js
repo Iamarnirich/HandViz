@@ -320,9 +320,10 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
         ap_7mConc = 0,
         plus_gb = 0,
         minus_gb = 0,
-        sanct2cr = 0,
         ap_but = 0,
-        ap_minusgb = 0;
+        ap_minusgb = 0,
+        ap_sanct2cr=0,
+        ge_sanct2cr=0;
 
     let ge_neutr = 0,
         ge_7mConc = 0,
@@ -366,7 +367,6 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
         const sanctionContreOpp = z.includes("2") || z.startsWith("cr");
         const plusFlag = !!(flagsByEvt[e.id]?.plus);
         if (opp7mObtenu) sevenConc += 1;
-        if (sanctionContreOpp) sanct2cr += 1;
         if (plusFlag) plus_gb += 1;
 
         if (oppNeut) neutralisations += 1;
@@ -378,6 +378,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
           if (oppTirKo) ap_tircontre += 1;
           if (plusFlag) ap_plusgb += 1;
           if (oppTirtotal) ap_tir += 1;
+          if (sanctionContreOpp) ap_sanct2cr += 1;
 
           if (oppBut) ap_but += 1;
           if (opp7mObtenu) ap_7mConc += 1;
@@ -389,6 +390,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
           if (oppTirKo) ge_tircontre += 1;
           if (plusFlag) ge_plusgb += 1;
           if (oppTirtotal ) ge_tir += 1;
+          if (sanctionContreOpp) ge_sanct2cr += 1;
           
 
           if (oppBut) ge_but += 1;
@@ -405,12 +407,12 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
     const d_ge_pos = ge_neutr + ge_tir + ge_plusgb;
     const d_ge_neg = ge_but + ge_7mConc + ge_minusgb ;
 
-    const d_neg_total = sanct2cr + minus_gb;
-    const d_pos_total = neutralisations + tircontre + plus_gb;
+    const d_neg_total = ap_sanct2cr + ge_sanct2cr + ap_minusgb + ge_minusgb;
+    const d_pos_total = ap_neutr + ge_neutr + ap_tircontre + ge_tircontre + ap_plusgb + ge_plusgb;
 
     const d_ratio_placee = d_ap_neg > 0 ? d_ap_pos / d_ap_neg : d_ap_pos > 0 ? d_ap_pos : 0;
     const d_ratio_ge     = d_ge_neg > 0 ? d_ge_pos / d_ge_neg : d_ge_pos > 0 ? d_ge_pos : 0;
-    const d_ratio_global = d_neg_total > 0 ? d_pos_total / d_neg_total : d_pos_total > 0 ? d_pos_total : 0;
+    const d_ratio_global = d_ratio_placee + d_ratio_ge ;
 
     return {
       offensif: {

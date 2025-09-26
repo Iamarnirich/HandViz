@@ -8,7 +8,14 @@ const IMPACT_GRID = [
   ["bas gauche", "bas milieu", "bas droite"],
 ];
 
-const norm = (s) => (s || "").toString().toLowerCase().trim();
+// Normalisation robuste (minuscules + accents retirés + trim)
+const norm = (s) =>
+  (s || "")
+    .toString()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
 
 const getColor = (eff) => {
   if (eff >= 70) return "bg-[#9FCDA8] text-white";
@@ -20,32 +27,42 @@ const getColor = (eff) => {
 export default function ImpactGridGK({ data, gardien }) {
   const stats = useMemo(() => {
     const byImpact = {};
-    const add = (impact, { isSave, isShot }) => {
-      const k = norm(impact);
+    const add = (impactRaw, { isSave, isShot }) => {
+      const k = norm(impactRaw);
       if (!k) return;
       if (!byImpact[k]) byImpact[k] = { total: 0, saves: 0 };
       if (isShot) byImpact[k].total += 1;
       if (isSave) byImpact[k].saves += 1;
     };
 
-    const gkName = (gardien?.nom || "").trim();
+    const gkName = norm(gardien?.nom);
     if (!gkName) return byImpact;
 
     (data || []).forEach((e) => {
-      const isThisGK =
-        (e.gb_cthb && e.gb_cthb.trim() === gkName) ||
-        (e.gb_adv && e.gb_adv.trim() === gkName);
+      // ✅ Détection gardien robuste (gb_cthb / gb_adv)
+      const gkCTHB = norm(e?.gb_cthb);
+      const gkADV  = norm(e?.gb_adv);
+      const isThisGK = gkCTHB === gkName || gkADV === gkName;
       if (!isThisGK) return;
 
-      const impact = e?.impact;
+      // ✅ Impact avec fallbacks possibles
+      const impact =
+        e?.impact ??
+        e?.secteur ??
+        e?.zone_impact ??
+        "";
+
+      // Résultats dans les 2 colonnes (minuscule + sans accents)
       const rc = norm(e?.resultat_cthb);
       const rl = norm(e?.resultat_limoges);
+      // On fusionne pour chercher facilement les patterns
       const r = `${rc} | ${rl}`;
 
-      const isSave = r.includes("tir arrete") || r.includes("tir arrêté");
-      const isWide = r.includes("tir hc");
-      const isBlock = r.includes("tir contre") || r.includes("tir contré");
-      const isGoal = r.startsWith("but ");
+      // Set des tirs à prendre en compte pour GK
+      const isSave  = r.includes("tir arrete") || r.includes("tir arrete") || r.includes("tir arrete"); // couvert par la normalisation (arrêté → arrete)
+      const isWide  = r.includes("tir hc");
+      const isBlock = r.includes("tir contre") || r.includes("tir contre");
+      const isGoal  = r.includes("but ") ; // inclut les buts encaissés (l’event porte le nom du GK adverse)
 
       const isShot = isSave || isWide || isBlock || isGoal;
       if (!isShot) return;

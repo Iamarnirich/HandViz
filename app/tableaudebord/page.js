@@ -198,6 +198,16 @@ function DashboardLayout() {
     () => (matchId == null ? null : (matchs || []).find((m) => toIdKey(m.id) === toIdKey(matchId))) || null,
     [matchId, matchs]
   );
+  
+  const uniqBy = (arr, keyFn) => {
+    const seen = new Set();
+    return (arr || []).filter((item) => {
+      const k = keyFn(item);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  };
 
   // Événements filtrés (comparaison robuste sur id_match)
   const filteredEvents = useMemo(() => {
@@ -280,6 +290,14 @@ function DashboardLayout() {
       (j) => String(j.poste || "").toUpperCase() === "GB"
     );
   }, [joueuses, matchId, selectedMatch, selectedTeam]);
+  
+
+  const gardiensOptions = useMemo(() => {
+    // 1er passage: dédoublonnage par id
+    const byId = uniqBy(gardiensFiltered, (g) => toIdKey(g.id));
+    // 2e passage: si des ids sont dupliqués ou manquants, fallback nom+équipe
+    return uniqBy(byId, (g) => `${norm(g.nom)}|${norm(g.equipe)}`);
+  }, [gardiensFiltered]);
 
 
   const selectedJoueuse = useMemo(
@@ -800,8 +818,8 @@ function DashboardLayout() {
                   className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Sélectionner un gardien</option>
-                  {gardiensFiltered.map((g) => (
-                    <option key={g.id} value={toIdKey(g.id)}>
+                  {gardiensOptions.map((g) => (
+                    <option key={toIdKey(g.id)} value={toIdKey(g.id)}>
                       {g.nom}
                     </option>
                   ))}
@@ -817,19 +835,17 @@ function DashboardLayout() {
                     height={160}
                     className="rounded-full shadow border object-cover"
                   />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                    <div className="w-full max-w-3xl">
-                      <EventTypePieChart data={dataForGKChart} />
-                      <div className="w-full max-w-5xl mt-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start"> 
+                    <div className="w-full max-w-5xl mt-[20px]">
                       <ImpactTablesGK data={dataForGKChart} gardien={selectedGardien} />
-                    </div>
                     </div>
                     <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
                       <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
                       <div className="w-full max-w-3xl aspect-[3/3]">
                       <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
+                      </div>
                     </div>
-                    </div>
+                    <EventTypePieChart data={dataForGKChart} />
                   </div>
                 </div>
               )}
