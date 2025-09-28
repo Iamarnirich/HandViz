@@ -13,7 +13,7 @@ import {
   ReferenceDot,
   Legend,
 } from "recharts";
-import { useMatch } from "@/contexts/MatchContext"; // ✅ dynamique
+import { useMatch } from "@/contexts/MatchContext"; 
 
 const LABEL_COLOR = "#1a1a1a";
 
@@ -32,7 +32,7 @@ function extractMinuteFromMillis(ms) {
 const norm = (s) => (s || "").toLowerCase().trim();
 
 export default function ProgressionTirsChart({ data }) {
-  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch(); // ✅
+  const { equipeLocale, equipeAdverse, isTousLesMatchs } = useMatch();
 
   const { offensif, defensif, events, maxY } = useMemo(() => {
     const off = {};
@@ -84,7 +84,7 @@ export default function ProgressionTirsChart({ data }) {
         }
       }
 
-      // ---------- Marqueurs d'événements (inchangé)
+      
       if (resCTHB.includes("tto") || resLIM.includes("tto")) {
         evts.push({ type: "tto", minute });
       }
@@ -117,7 +117,7 @@ export default function ProgressionTirsChart({ data }) {
       events: evts,
       maxY: max + 1,
     };
-  }, [data, equipeLocale, equipeAdverse, isTousLesMatchs]); // ✅
+  }, [data, equipeLocale, equipeAdverse, isTousLesMatchs]); 
 
   const renderBars = (stackId) =>
     Object.entries(PHASES).map(([label, { key, color }]) => (

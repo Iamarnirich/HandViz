@@ -13,7 +13,7 @@ export default function EnclenchementsTable({
   const { rapport } = useRapport();
   const { equipeLocale, isTousLesMatchs } = useMatch();
 
-  // ---- utils
+  
   const norm = (s) => (s || "").toString().toLowerCase().trim();
   const slug = (s) =>
     norm(s)
@@ -82,12 +82,12 @@ export default function EnclenchementsTable({
   const pickDefResMulti = (e, team) => {
     const rc = norm(e?.resultat_cthb);
     const rl = norm(e?.resultat_limoges);
-    if (team && rc.includes(team)) return rl; // côté opposé
+    if (team && rc.includes(team)) return rl; 
     if (team && rl.includes(team)) return rc;
     return rl || rc || "";
   };
 
-  // ---- FOCUS : tolérant aux variantes
+  
   const FOCUS = [
     { keys: ["2vs2", "2v2"], label: "2vs2" },
     { keys: ["duel", "1c1", "1vs1"], label: "Duel" },
@@ -96,7 +96,7 @@ export default function EnclenchementsTable({
   ];
   const matchAny = (txt, keys) => keys.some((k) => slug(txt).includes(k));
 
-  // ---- Règle de succès OFFENSIF (inchangée)
+  
   const isOffSuccess = (r, team) => {
     if (!r) return false;
     // but (évite "encaissé")
@@ -112,7 +112,7 @@ export default function EnclenchementsTable({
       return true;
     }
     // 2' obtenu(e)/provoqué(e)
-    if (r.includes("2'") && (r.includes("obten") || r.includes("provoc"))) return true;
+    if (r.includes("2'") && (r.includes("obtenu") || r.includes("provoc"))) return true;
     return false;
   };
 
@@ -144,8 +144,8 @@ export default function EnclenchementsTable({
           const rOff = pickOffResSingle(evt);
           return isOffSuccess(rOff, team);
         }
-        const rOpp = pickDefResSingle(evt);     // champ résultat de l’adversaire (passé par le parent)
-        return isOffSuccess(rOpp, opp);         // même règle, mais avec le nom de l’adversaire
+        const rOpp = pickDefResSingle(evt);     
+        return isOffSuccess(rOpp, opp);         
       };
 
       (data || []).forEach((evt) => {
@@ -212,7 +212,7 @@ export default function EnclenchementsTable({
         if (!a.startsWith("attaque ")) return false;
         return rapport === "offensif"
           ? a.startsWith(`attaque ${team}`)
-          : a.startsWith(`attaque ${opp}`); // ✅ attaque adverse
+          : a.startsWith(`attaque ${opp}`); 
       };
 
       const successOf = (evt) => {

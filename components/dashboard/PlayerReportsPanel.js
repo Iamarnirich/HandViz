@@ -17,7 +17,7 @@ function StatCardShell({ title, children }) {
   );
 }
 
-/** Jauge avec ratio + (buts/tirs) au-dessus */
+
 function HalfGauge({ label, value, numerator = 0, denominator = 0 }) {
   const v = isNaN(value) ? 0 : Math.max(0, Math.min(100, value));
   const color = v >= 60 ? "#9FCDA8" : v >= 45 ? "#FFD4A1" : "#F44336";
@@ -48,7 +48,7 @@ function HalfGauge({ label, value, numerator = 0, denominator = 0 }) {
   );
 }
 
-/* Utils */
+
 const norm = (s) =>
   (s || "")
     .toString()
@@ -64,7 +64,7 @@ const splitNames = (raw) =>
     .map((t) => t.trim())
     .filter(Boolean);
 
-/* ⬅️ DEFENSIF: déduction adversaire (robuste et locale au composant) */
+
 function inferOppTeam(allEvents, team) {
   if (!team) return "";
   const counts = new Map();
@@ -303,7 +303,7 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
     const effTotVal = attemptsAll > 0 ? (goalsAll / attemptsAll) * 100 : 0;
     const eff7mVal = attempts7m > 0 ? (goals7m / attempts7m) * 100 : 0;
 
-    /* ⬅️ DEFENSIF: calculs côté adversaire (sans toucher à l’offensif ci-dessus) */
+    
     const opp = inferOppTeam(events, team);
     let ap_neutr = 0,
         ap_tir = 0,
@@ -348,12 +348,9 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
           a.startsWith(`mb ${opp}`) ||
           a.startsWith(`transition ${opp}`);
 
-        // Négatif défense (favorable à l’adversaire)
         const oppBut = rOpp.startsWith(`but ${opp}`);
         const opp7mObtenu = rOpp.startsWith(`7m obtenu ${opp}`);
         const minusFlag = !!(flagsByEvt[e.id]?.minus);
-
-        // Positif défense (défavorable à l’adversaire)
         const oppNeut = rOpp.startsWith(`${opp} neutralisee`) || rOpp.startsWith(`${opp} neutralisée`);
         const oppTirKo =
           rOpp.startsWith(`tir contre ${opp}`) ||

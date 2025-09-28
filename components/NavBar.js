@@ -28,7 +28,7 @@ export default function NavBar() {
 
   if (checkingSession) return null;
 
-  // -------- helpers --------
+  // Normalise le nom du match depuis le nom de fichier
   const normalizeMatchName = (filename) =>
     filename
       .replace(/^Données_?/i, "")

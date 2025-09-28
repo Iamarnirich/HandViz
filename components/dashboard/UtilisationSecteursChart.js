@@ -60,10 +60,10 @@ function inferTeamsForMatch(events, eqLocal, eqAdv) {
 
 export default function UtilisationSecteursChart({
   data,
-  teamName,        // ✅ passé par le DashboardLayout
-  offenseField,    // ✅ non utilisé ici mais gardé pour cohérence API
-  defenseField,    // ✅ non utilisé ici mais gardé pour cohérence API
-  matchCount,      // ✅ non utilisé directement (on re-compte), mais laissé pour compat
+  teamName,        
+  offenseField,    
+  defenseField,    
+  matchCount,  
 }) {
   const { isTousLesMatchs, equipeLocale, equipeAdverse } = useMatch();
   const { rapport } = useRapport();
@@ -71,7 +71,6 @@ export default function UtilisationSecteursChart({
   const secteursData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
-    // si on est en "tous les matchs" et qu’aucune équipe n’est choisie → rien à afficher
     const teamRef = norm(teamName || "");
     if (isTousLesMatchs && !teamRef) return [];
 
@@ -90,9 +89,6 @@ export default function UtilisationSecteursChart({
       // équipes pour CE match
       const { team, opp } = inferTeamsForMatch(events, equipeLocale, equipeAdverse);
 
-      // déterminer la "cible" selon rapport + sélection
-      // - offensif : cible = teamRef
-      // - defensif : cible = adversaire de teamRef
       let cible = "";
       if (teamRef) {
         if (rapport === "offensif") {

@@ -19,14 +19,12 @@ import ImpactGridGK from "@/components/dashboard/ImpactGridGK";
 import TerrainHandballGK from "@/components/dashboard/TerrainHandballGK";
 import ImpactTablesGK from "@/components/dashboard/ImpactTablesGK";
 
-
-
 /* ====== Noms des vues (adapter si besoin) ====== */
 const VIEW_INDIVIDUEL = "v_joueur_match_events";
 const VIEW_GARDIEN = "v_gardien_match_events";
 
 /* ------ helpers ------ */
-const toIdKey = (v) => (v == null ? "" : String(v)); // pour comparer id string/number sans bug
+const toIdKey = (v) => (v == null ? "" : String(v));
 const norm = (s) => (s || "").toLowerCase().trim();
 
 // Convertit un lien Drive (view ou ?id=) en /uc?id=...
@@ -44,7 +42,7 @@ function driveToDirect(url) {
   }
 }
 
-// Image “safe” (évite crash si logo externe non autorisé)
+// Image “safe”
 function SafeImage({ src, alt, ...props }) {
   const ok =
     src &&
@@ -63,7 +61,7 @@ function DashboardLayout() {
   const [joueuseId, setJoueuseId] = useState(null);
   const [gardienId, setGardienId] = useState(null);
 
-  const [matchId, setMatchIdLocal] = useState(null); // on stocke l’id choisi
+  const [matchId, setMatchIdLocal] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState("USDK");
 
   const { rapport, setRapport } = useRapport();
@@ -86,34 +84,45 @@ function DashboardLayout() {
   useEffect(() => {
     async function fetchAll() {
       try {
-        const [{ data: matchsData }, { data: evenementsData }, { data: clubsData }, { data: joueusesData }, { data: jeData }] =
-          await Promise.all([
-            supabase
-              .from("matchs")
-              .select(
-                "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match, journee"
-              )
-              .order("date_match", { ascending: false }),
-            supabase.from("evenements").select("*").range(0, 50000),
-            supabase.from("clubs").select("id, nom, logo"),
-            supabase.from("joueuses").select("id, nom, photo_url, equipe, poste"),
-            supabase
-              .from("joueuses_evenements")
-              .select(
-                "id, id_evenement, id_joueuse, nom_joueuse, joueur_plus_cthb, joueur_minus_cthb, joueur_minus_cthb_prime"
-              )
-              .range(0, 20000),
-          ]);
+        const [
+          { data: matchsData },
+          { data: evenementsData },
+          { data: clubsData },
+          { data: joueusesData },
+          { data: jeData },
+        ] = await Promise.all([
+          supabase
+            .from("matchs")
+            .select(
+              "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match, journee"
+            )
+            .order("date_match", { ascending: false }),
+          supabase.from("evenements").select("*").range(0, 50000),
+          supabase.from("clubs").select("id, nom, logo"),
+          supabase.from("joueuses").select("id, nom, photo_url, equipe, poste"),
+          supabase
+            .from("joueuses_evenements")
+            .select(
+              "id, id_evenement, id_joueuse, nom_joueuse, joueur_plus_cthb, joueur_minus_cthb, joueur_minus_cthb_prime"
+            )
+            .range(0, 20000),
+        ]);
 
         // Vues (en silence si absentes)
         let viewIndiv = [];
         let viewGK = [];
         try {
-          const { data: vi } = await supabase.from(VIEW_INDIVIDUEL).select("*").range(0, 50000);
+          const { data: vi } = await supabase
+            .from(VIEW_INDIVIDUEL)
+            .select("*")
+            .range(0, 50000);
           viewIndiv = vi || [];
         } catch {}
         try {
-          const { data: vg } = await supabase.from(VIEW_GARDIEN).select("*").range(0, 50000);
+          const { data: vg } = await supabase
+            .from(VIEW_GARDIEN)
+            .select("*")
+            .range(0, 50000);
           viewGK = vg || [];
         } catch {}
 
@@ -130,7 +139,6 @@ function DashboardLayout() {
         setViewIndivRows(viewIndiv);
         setViewGardienRows(viewGK);
       } finally {
-        // reset contexte global
         setEquipeLocale(null);
         setEquipeAdverse(null);
         setNomMatch(null);
@@ -193,12 +201,15 @@ function DashboardLayout() {
     [matchOptions]
   );
 
-  // Match sélectionné (comparaison robuste string/number)
+  // Match sélectionné
   const selectedMatch = useMemo(
-    () => (matchId == null ? null : (matchs || []).find((m) => toIdKey(m.id) === toIdKey(matchId))) || null,
+    () =>
+      (matchId == null
+        ? null
+        : (matchs || []).find((m) => toIdKey(m.id) === toIdKey(matchId))) || null,
     [matchId, matchs]
   );
-  
+
   const uniqBy = (arr, keyFn) => {
     const seen = new Set();
     return (arr || []).filter((item) => {
@@ -209,7 +220,7 @@ function DashboardLayout() {
     });
   };
 
-  // Événements filtrés (comparaison robuste sur id_match)
+  // Événements filtrés
   const filteredEvents = useMemo(() => {
     if (!selectedTeam && !matchId) return [];
     if (matchId != null) {
@@ -217,7 +228,9 @@ function DashboardLayout() {
       return (evenements || []).filter((e) => toIdKey(e.id_match) === key);
     }
     if (selectedTeam) {
-      return (evenements || []).filter((e) => teamMatchIdKeys.has(toIdKey(e.id_match)));
+      return (evenements || []).filter((e) =>
+        teamMatchIdKeys.has(toIdKey(e.id_match))
+      );
     }
     return evenements || [];
   }, [evenements, selectedTeam, matchId, teamMatchIdKeys]);
@@ -228,16 +241,15 @@ function DashboardLayout() {
     return new Set(filteredEvents.map((e) => toIdKey(e.id_match))).size;
   }, [filteredEvents, matchId]);
 
-  // Clubs du match sélectionné
+  // Clubs
   const clubLocal =
     (selectedMatch && clubs[selectedMatch.club_locale_id]) ||
     (selectedMatch ? { nom: selectedMatch.equipe_locale, logo: "/placeholder.jpg" } : null);
-
   const clubVisiteur =
     (selectedMatch && clubs[selectedMatch.club_visiteuse_id]) ||
     (selectedMatch ? { nom: selectedMatch.equipe_visiteuse, logo: "/placeholder.jpg" } : null);
 
-  // Score (compte “but …” dans le champ côté local/visiteur)
+  // Score
   const getScore = (isLocale) => {
     if (filteredEvents.length === 0) return 0;
     return filteredEvents.filter((e) => {
@@ -250,6 +262,7 @@ function DashboardLayout() {
   const scoreVisiteur = getScore(false);
 
   const isIndividuel = rapport === "individuel";
+
   const joueusesFiltered = useMemo(() => {
     if (matchId != null && selectedMatch) {
       if (!isIndividuel) {
@@ -270,7 +283,7 @@ function DashboardLayout() {
     );
   }, [joueuses, isIndividuel, matchId, selectedMatch]);
 
-    // Gardiens : même logique que "individuel" → n'afficher que les GB de l'USDK
+  // Gardiens
   const gardiensFiltered = useMemo(() => {
     if (norm(selectedTeam) === "usdk") {
       return (joueuses || []).filter(
@@ -290,22 +303,24 @@ function DashboardLayout() {
       (j) => String(j.poste || "").toUpperCase() === "GB"
     );
   }, [joueuses, matchId, selectedMatch, selectedTeam]);
-  
 
   const gardiensOptions = useMemo(() => {
-    // 1er passage: dédoublonnage par id
     const byId = uniqBy(gardiensFiltered, (g) => toIdKey(g.id));
-    // 2e passage: si des ids sont dupliqués ou manquants, fallback nom+équipe
     return uniqBy(byId, (g) => `${norm(g.nom)}|${norm(g.equipe)}`);
   }, [gardiensFiltered]);
 
-
   const selectedJoueuse = useMemo(
-    () => (joueuseId == null ? null : (joueuses || []).find((j) => toIdKey(j.id) === toIdKey(joueuseId))) || null,
+    () =>
+      (joueuseId == null
+        ? null
+        : (joueuses || []).find((j) => toIdKey(j.id) === toIdKey(joueuseId))) || null,
     [joueuseId, joueuses]
   );
   const selectedGardien = useMemo(
-    () => (gardienId == null ? null : (joueuses || []).find((j) => toIdKey(j.id) === toIdKey(gardienId))) || null,
+    () =>
+      (gardienId == null
+        ? null
+        : (joueuses || []).find((j) => toIdKey(j.id) === toIdKey(gardienId))) || null,
     [gardienId, joueuses]
   );
 
@@ -332,7 +347,7 @@ function DashboardLayout() {
 
   const handleMatchChange = (e) => {
     const raw = e.target.value;
-    const newId = raw === "all" ? null : raw; // on garde tel quel mais on comparera toujours via toIdKey
+    const newId = raw === "all" ? null : raw;
     setMatchIdLocal(newId);
 
     if (newId != null) {
@@ -341,7 +356,7 @@ function DashboardLayout() {
         setEquipeLocale(m.equipe_locale);
         setEquipeAdverse(m.equipe_visiteuse);
         setNomMatch(m.nom_match);
-        setIdMatch(m.id); // pour le contexte global
+        setIdMatch(m.id);
         setIsTousLesMatchs(false);
       }
     } else {
@@ -353,7 +368,7 @@ function DashboardLayout() {
     }
   };
 
-  // Champs dynamiques (home/away) pour les composants existants
+  // Champs dynamiques
   let offenseField = "resultat_cthb";
   let defenseField = "resultat_limoges";
   if (selectedTeam && selectedMatch) {
@@ -364,14 +379,14 @@ function DashboardLayout() {
     defenseField = isHome ? "resultat_limoges" : "resultat_cthb";
   }
 
-  // “individuel” limité à USDK (logique conservée)
   const isUSDKSelected = norm(selectedTeam) === "usdk";
 
-  /* ===== Données pour INDIVIDUEL depuis la vue ===== */
+  /* ===== Données pour INDIVIDUEL ===== */
   const eventsFromViewIndiv = useMemo(() => {
     if (!selectedJoueuse) return [];
     const rows = (viewIndivRows || []).filter((r) => {
-      const okPlayer = toIdKey(r.id_joueuse ?? r.joueuse_id) === toIdKey(selectedJoueuse.id);
+      const okPlayer =
+        toIdKey(r.id_joueuse ?? r.joueuse_id) === toIdKey(selectedJoueuse.id);
       const okMatch = matchId == null || toIdKey(r.id_match) === toIdKey(matchId);
       return okPlayer && okMatch;
     });
@@ -389,9 +404,11 @@ function DashboardLayout() {
     }));
   }, [viewIndivRows, selectedJoueuse, matchId]);
 
-  const dataForIndividuel = eventsFromViewIndiv.length ? eventsFromViewIndiv : filteredEvents;
+  const dataForIndividuel = eventsFromViewIndiv.length
+    ? eventsFromViewIndiv
+    : filteredEvents;
 
-  /* ===== Données pour GARDIEN depuis la vue ===== */
+  /* ===== Données pour GARDIEN ===== */
   const eventsFromViewGK = useMemo(() => {
     if (!selectedGardien) return [];
     const rows = (viewGardienRows || []).filter((r) => {
@@ -435,453 +452,468 @@ function DashboardLayout() {
   const shouldHideDashboard = !selectedTeam && matchId == null;
 
   return (
-    <div className="relative min-h-[calc(100vh-120px)] mt-[20px] mb-[40px] px-4 py-6 space-y-10 bg-gray-100">
-      {/* Sélecteurs */}
-      <div className="flex justify-center mb-4 gap-3">
-        <select
-          value={selectedTeam}
-          onChange={handleTeamChange}
-          className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Sélectionner une équipe</option>
-          {teamOptions.map((nom) => (
-            <option key={nom} value={nom}>
-              {nom}
-            </option>
-          ))}
-        </select>
+    <div className="relative min-h-[calc(100vh-120px)] bg-gray-100">
+      <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6 xl:px-8 py-6 sm:py-8 space-y-8 sm:space-y-10">
 
-        <select
-          value={matchId == null ? "all" : toIdKey(matchId)}
-          onChange={handleMatchChange}
-          className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">
-            {selectedTeam ? "Tous les matchs de l’équipe sélectionnée" : "Tous les matchs"}
-          </option>
-          {matchOptions.map((m) => (
-            <option key={m.id} value={toIdKey(m.id)}>
-              {m.nom_match}
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* Sélecteurs */}
+        <div className="sticky top-0 z-10 bg-gray-100/80 backdrop-blur supports-[backdrop-filter]:bg-gray-100/60 border-b border-gray-200 -mx-3 sm:-mx-4 lg:-mx-6 xl:-mx-8">
+          <div className="mx-auto w-full max-w-[1400px] px-3 sm:px-4 lg:px-6 xl:px-8 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
+              <select
+                value={selectedTeam}
+                onChange={handleTeamChange}
+                className="w-full sm:w-auto border border-gray-300 text-black rounded-lg px-4 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+              >
+                <option value="">Sélectionner une équipe</option>
+                {teamOptions.map((nom) => (
+                  <option key={nom} value={nom}>
+                    {nom}
+                  </option>
+                ))}
+              </select>
 
-      {matchId != null && clubLocal && clubVisiteur && (
-        <div className="mt-4 w-fit mx-auto flex flex-col items-center gap-1">
-          <p className="text-sm font-semibold text-gray-600">
-            {selectedMatch?.journee ?? "—"}-{selectedMatch?.date_match ?? "—"}
-          </p>
-          <p className="text-sm font-semibold text-gray-600">
-            {arbitresForSelectedMatch || "—"}
-          </p>
-          <div className="flex items-center justify-center gap-8 px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1]">
-            <div className="flex items-center gap-3">
-              <SafeImage
-                src={clubLocal.logo}
-                alt={clubLocal.nom}
-                width={50}
-                height={50}
-              />
-              <div className="text-right">
-                <p className="text-sm font-semibold text-gray-600">{clubLocal.nom}</p>
-                <p className="text-[22px] font-bold text-[#1a1a1a]">{scoreLocal}</p>
-              </div>
-            </div>
-            <div className="text-[24px] font-extrabold text-[#D4AF37]">–</div>
-            <div className="flex items-center gap-3">
-              <div className="text-left">
-                <p className="text-sm font-semibold text-gray-600">{clubVisiteur.nom}</p>
-                <p className="text-[22px] font-bold text-[#1a1a1a]">{scoreVisiteur}</p>
-              </div>
-              <SafeImage
-                src={clubVisiteur.logo}
-                alt={clubVisiteur.nom}
-                width={50}
-                height={50}
-              />
+              <select
+                value={matchId == null ? "all" : toIdKey(matchId)}
+                onChange={handleMatchChange}
+                className="w-full sm:w-auto border border-gray-300 text-black rounded-lg px-4 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+              >
+                <option value="all">
+                  {selectedTeam
+                    ? "Tous les matchs de l’équipe sélectionnée"
+                    : "Tous les matchs"}
+                </option>
+                {matchOptions.map((m) => (
+                  <option key={m.id} value={toIdKey(m.id)}>
+                    {m.nom_match}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
-      )}
 
-      <div className="flex justify-center gap-3 flex-wrap mb-6">
-        {[
-          { key: "offensif", label: "Rapport offensif" },
-          { key: "defensif", label: "Rapport défensif" },
-          { key: "individuel", label: "Rapport individuel" },
-          { key: "gardien", label: "Rapport gardien" },
-        ].map((r) => (
+        {/* En-tête match */}
+        {matchId != null && clubLocal && clubVisiteur && (
+          <div className="mt-2 w-fit mx-auto flex flex-col items-center gap-1">
+            <p className="text-sm font-semibold text-gray-600">
+              {selectedMatch?.journee ?? "—"}-{selectedMatch?.date_match ?? "—"}
+            </p>
+            <p className="text-sm font-semibold text-gray-600">
+              {arbitresForSelectedMatch || "—"}
+            </p>
+            <div className="flex items-center justify-center gap-6 sm:gap-8 px-4 sm:px-6 py-3 bg-white rounded-xl shadow-md border border-[#E4CDA1] w-full max-w-[820px]">
+              <div className="flex items-center gap-3">
+                <SafeImage src={clubLocal.logo} alt={clubLocal.nom} width={50} height={50} />
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-gray-600">{clubLocal.nom}</p>
+                  <p className="text-[22px] font-bold text-[#1a1a1a]">{scoreLocal}</p>
+                </div>
+              </div>
+              <div className="text-[24px] font-extrabold text-[#D4AF37]">–</div>
+              <div className="flex items-center gap-3">
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-gray-600">{clubVisiteur.nom}</p>
+                  <p className="text-[22px] font-bold text-[#1a1a1a]">{scoreVisiteur}</p>
+                </div>
+                <SafeImage src={clubVisiteur.logo} alt={clubVisiteur.nom} width={50} height={50} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex justify-center gap-2 sm:gap-3 flex-wrap">
+          {[
+            { key: "offensif", label: "Rapport offensif" },
+            { key: "defensif", label: "Rapport défensif" },
+            { key: "individuel", label: "Rapport individuel" },
+            { key: "gardien", label: "Rapport gardien" },
+          ].map((r) => (
+            <button
+              key={r.key}
+              onClick={() => {
+                setShowHistorique(false);
+                setRapport(r.key);
+              }}
+              className={`px-3 sm:px-4 py-1.5 rounded-full border text-sm font-medium transition shadow-sm ${
+                rapport === r.key && !showHistorique
+                  ? "bg-[#D4AF37] text-white border-[#D4AF37]"
+                  : "bg-white text-[#1a1a1a] border-gray-300 hover:border-[#D4AF37]/60"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
           <button
-            key={r.key}
-            onClick={() => {
-              setShowHistorique(false);
-              setRapport(r.key);
-            }}
-            className={`px-4 py-1 rounded-full border text-sm font-medium transition ${
-              rapport === r.key && !showHistorique
-                ? "bg-[#D4AF37] text-white"
-                : "bg-white text-[#1a1a1a]"
+            onClick={() => setShowHistorique(true)}
+            className={`px-3 sm:px-4 py-1.5 rounded-full border text-sm font-medium transition shadow-sm ${
+              showHistorique
+                ? "bg-[#D4AF37] text-white border-[#D4AF37]"
+                : "bg-white text-[#1a1a1a] border-gray-300 hover:border-[#D4AF37]/60"
             }`}
           >
-            {r.label}
+            Historique match
           </button>
-        ))}
-
-        <button
-          onClick={() => setShowHistorique(true)}
-          className={`px-4 py-1 rounded-full border text-sm font-medium transition ${
-            showHistorique ? "bg-[#D4AF37] text-white" : "bg-white text-[#1a1a1a]"
-          }`}
-        >
-          Historique match
-        </button>
-      </div>
-
-      {!shouldHideDashboard && !showHistorique && (
-        <>
-          {rapport === "offensif" && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                <div className="h-full flex flex-col gap-6">
-                  <StatGlobalOverview
-                    data={filteredEvents}
-                    matchCount={matchCountFiltered}
-                    teamName={selectedTeam}
-                    offenseField={offenseField}
-                    defenseField={defenseField}
-                  />
-                  <div className="w-full flex justify-center">
-                    <TimelineChart
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                  </div>
-                </div>
-                <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
-                  <ImpactGrid
-                    data={filteredEvents}
-                    matchCount={matchCountFiltered}
-                    teamName={selectedTeam}
-                    offenseField={offenseField}
-                    defenseField={defenseField}
-                  />
-                  <div className="w-full max-w-3xl aspect-[3/3]">
-                    <TerrainHandBall
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="w-full flex flex-col items-center justify-center gap-16 mt-8">
-                <div className="flex flex-row justify-center gap-10 items-start w-full max-w-[1600px] px-4">
-                  <div className="flex flex-col gap-6 items-end w-full max-w-[280px]">
-                    <GaugesPanel
-                      data={filteredEvents}
-                      range="left"
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                    <GaugesPanel
-                      data={filteredEvents}
-                      range="bottom-left"
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                  </div>
-                  <div className="flex flex-col items-center gap-8 w-full">
-                    <div className="w-full max-w-4xl">
-                      <UtilisationSecteursChart
-                        data={filteredEvents}
-                        matchCount={matchCountFiltered}
-                        teamName={selectedTeam}
-                        offenseField={offenseField}
-                        defenseField={defenseField}
-                      />
-                    </div>
-
-                    <div className="w-full max-w-6xl px-4">
-                      <EnclenchementsTable
-                        data={filteredEvents}
-                        matchCount={matchCountFiltered}
-                        teamName={selectedTeam}
-                        offenseField={offenseField}
-                        defenseField={defenseField}
-                      />
-                    </div>
-
-                    <div className="w-full max-w-4xl mt-6">
-                      <CamembertChart
-                        data={filteredEvents}
-                        matchCount={matchCountFiltered}
-                        teamName={selectedTeam}
-                        offenseField={offenseField}
-                        defenseField={defenseField}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-6 items-start w-full max-w-[280px]">
-                    <GaugesPanel
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                      range="right"
-                    />
-                    <GaugesPanel
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                      range="bottom-right"
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {rapport === "defensif" && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                <div className="h-full flex flex-col gap-6">
-                  <StatGlobalOverview
-                    data={filteredEvents}
-                    matchCount={matchCountFiltered}
-                    teamName={selectedTeam}
-                    offenseField={offenseField}
-                    defenseField={defenseField}
-                  />
-                  <div className="w-full flex justify-center">
-                    <TimelineChart
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                  </div>
-                </div>
-                <div className="h-full w-full flex flex-col gap-1 items-center mt-[20px]">
-                  <ImpactGrid
-                    data={filteredEvents}
-                    matchCount={matchCountFiltered}
-                    teamName={selectedTeam}
-                    offenseField={offenseField}
-                    defenseField={defenseField}
-                  />
-                  <div className="w-full max-w-3xl aspect-[3/3]">
-                    <TerrainHandBall
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="w-full flex flex-col items-center justify-center gap-16 mt-8">
-                <div className="flex flex-row justify-center gap-10 items-start w-full max-w-[1600px] px-4">
-                  <div className="flex flex-col gap-6 items-end w-full max-w-[280px]">
-                    <GaugesPanel
-                      data={filteredEvents}
-                      range="left"
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                    <GaugesPanel
-                      data={filteredEvents}
-                      range="bottom-left"
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                    />
-                  </div>
-                  <div className="flex flex-col items-center gap-8 w-full">
-                    <div className="w-full max-w-4xl">
-                      <UtilisationSecteursChart
-                        data={filteredEvents}
-                        matchCount={matchCountFiltered}
-                        teamName={selectedTeam}
-                        offenseField={offenseField}
-                        defenseField={defenseField}
-                      />
-                    </div>
-
-                    <div className="w-full max-w-6xl px-4">
-                      <EnclenchementsTable
-                        data={filteredEvents}
-                        matchCount={matchCountFiltered}
-                        teamName={selectedTeam}
-                        offenseField={offenseField}
-                        defenseField={defenseField}
-                      />
-                    </div>
-
-                    <div className="w-full max-w-4xl mt-6">
-                      <CamembertChart
-                        data={filteredEvents}
-                        matchCount={matchCountFiltered}
-                        teamName={selectedTeam}
-                        offenseField={offenseField}
-                        defenseField={defenseField}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-6 items-start w-full max-w-[280px]">
-                    <GaugesPanel
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                      range="right"
-                    />
-                    <GaugesPanel
-                      data={filteredEvents}
-                      matchCount={matchCountFiltered}
-                      teamName={selectedTeam}
-                      offenseField={offenseField}
-                      defenseField={defenseField}
-                      range="bottom-right"
-                    />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ===== Rapport individuel ===== */}
-          {!showHistorique && rapport === "individuel" && isUSDKSelected && (
-            <>
-              <div className="flex justify-center mb-4">
-                <select
-                  onChange={(e) => setJoueuseId(e.target.value || null)}
-                  value={joueuseId || ""}
-                  className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sélectionner un joueur</option>
-                  {joueusesFiltered.map((j) => (
-                    <option key={j.id} value={toIdKey(j.id)}>
-                      {j.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedJoueuse && (
-                <div className="flex flex-col items-center gap-6">
-                  <Image
-                    src={driveToDirect(selectedJoueuse.photo_url) || "/placeholder.jpg"}
-                    alt={selectedJoueuse.nom}
-                    width={160}
-                    height={160}
-                    className="rounded-full shadow border object-cover"
-                  />
-                  <PlayerReportsPanel
-                    events={dataForIndividuel}
-                    jeLinks={jeLinks}
-                    match={selectedMatch}
-                    joueur={selectedJoueuse}
-                  />
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ===== Rapport gardien ===== */}
-          {rapport === "gardien" && isUSDKSelected && (
-            <>
-              <div className="flex justify-center mb-4">
-                <select
-                  onChange={(e) => setGardienId(e.target.value || null)}
-                  value={gardienId || ""}
-                  className="border border-gray-300 text-black rounded px-4 py-2 shadow text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sélectionner un gardien</option>
-                  {gardiensOptions.map((g) => (
-                    <option key={toIdKey(g.id)} value={toIdKey(g.id)}>
-                      {g.nom}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedGardien && (
-                <div className="flex flex-col items-center gap-6">
-                  <Image
-                    src={driveToDirect(selectedGardien.photo_url) || "/placeholder.jpg"}
-                    alt={selectedGardien.nom}
-                    width={160}
-                    height={160}
-                    className="rounded-full shadow border object-cover"
-                  />
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-15 items-stretch w-full">
-                    {/* Colonne gauche : tables */}
-                    <div className="w-full h-full mt-[20px]">
-                      <ImpactTablesGK data={dataForGKChart} gardien={selectedGardien} />
-                    </div>
-
-                    {/* Colonne droite : grille + terrain */}
-                    <div className="w-full h-full flex flex-col gap-6 mt-[20px]">
-                      <div className="w-full">
-                        <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
-                      </div>
-                      <div className="w-full max-w-2xl aspect-[3/3]">
-                        <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
-                      </div>
-                    </div>
-
-                    {/* Rangée du bas : Camembert sur toute la largeur (col-span-2) */}
-                    <div className="md:col-span-2 w-full">
-                      <CamembertChart data={dataForGKChart} />
-                    </div>
-                  </div>
-
-                </div>
-              )}
-            </>
-          )}
-
-        </>
-      )}
-
-      {!showHistorique && (selectedTeam || matchId != null) && (
-        <></>
-      )}
-
-      {!(!selectedTeam && matchId == null) && showHistorique && (
-        <div className="w-full flex flex-col items-center justify-center space-y-12">
-          <div className="w-full max-w-6xl">
-            <ProgressionTirsChart
-              data={filteredEvents}
-              matchCount={matchCountFiltered}
-              teamName={selectedTeam}
-              offenseField={offenseField}
-              defenseField={defenseField}
-            />
-          </div>
         </div>
-      )}
+
+        {/* DASHBOARD */}
+        {!shouldHideDashboard && !showHistorique && (
+          <>
+            {/* OFFENSIF */}
+            {rapport === "offensif" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                  <div className="h-full flex flex-col gap-6 md:col-span-7">
+                    <StatGlobalOverview
+                      data={filteredEvents}
+                      matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
+                    />
+                    <div className="w-full flex justify-center">
+                      <TimelineChart
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="h-full w-full flex flex-col gap-4 md:gap-6 items-center mt-[12px] md:mt-[20px] md:col-span-5">
+                    <ImpactGrid
+                      data={filteredEvents}
+                      matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
+                    />
+                    <div className="w-full">
+                      <TerrainHandBall
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-full flex flex-col items-center justify-center gap-12 sm:gap-14 mt-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
+                    {/* Gauges gauche */}
+                    <div className="order-2 lg:order-1 lg:col-span-2 flex flex-col gap-6">
+                      <GaugesPanel
+                        data={filteredEvents}
+                        range="left"
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                      <GaugesPanel
+                        data={filteredEvents}
+                        range="bottom-left"
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                    </div>
+
+                    {/* Contenu central */}
+                    <div className="order-1 lg:order-2 lg:col-span-8 flex flex-col items-center gap-8 w-full">
+                      <div className="w-full">
+                        <UtilisationSecteursChart
+                          data={filteredEvents}
+                          matchCount={matchCountFiltered}
+                          teamName={selectedTeam}
+                          offenseField={offenseField}
+                          defenseField={defenseField}
+                        />
+                      </div>
+
+                      <div className="w-full">
+                        <EnclenchementsTable
+                          data={filteredEvents}
+                          matchCount={matchCountFiltered}
+                          teamName={selectedTeam}
+                          offenseField={offenseField}
+                          defenseField={defenseField}
+                        />
+                      </div>
+
+                      <div className="w-full mt-2">
+                        <CamembertChart
+                          data={filteredEvents}
+                          matchCount={matchCountFiltered}
+                          teamName={selectedTeam}
+                          offenseField={offenseField}
+                          defenseField={defenseField}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Gauges droite */}
+                    <div className="order-3 lg:col-span-2 flex flex-col gap-6">
+                      <GaugesPanel
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                        range="right"
+                      />
+                      <GaugesPanel
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                        range="bottom-right"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* DEFENSIF */}
+            {rapport === "defensif" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                  <div className="h-full flex flex-col gap-6 md:col-span-7">
+                    <StatGlobalOverview
+                      data={filteredEvents}
+                      matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
+                    />
+                    <div className="w-full flex justify-center">
+                      <TimelineChart
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="h-full w-full flex flex-col gap-4 md:gap-6 items-center mt-[12px] md:mt-[20px] md:col-span-5">
+                    <ImpactGrid
+                      data={filteredEvents}
+                      matchCount={matchCountFiltered}
+                      teamName={selectedTeam}
+                      offenseField={offenseField}
+                      defenseField={defenseField}
+                    />
+                    <div className="w-full">
+                      <TerrainHandBall
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-full flex flex-col items-center justify-center gap-12 sm:gap-14 mt-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
+                    {/* Gauges gauche */}
+                    <div className="order-2 lg:order-1 lg:col-span-2 flex flex-col gap-6">
+                      <GaugesPanel
+                        data={filteredEvents}
+                        range="left"
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                      <GaugesPanel
+                        data={filteredEvents}
+                        range="bottom-left"
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                      />
+                    </div>
+
+                    {/* Contenu central */}
+                    <div className="order-1 lg:order-2 lg:col-span-8 flex flex-col items-center gap-8 w-full">
+                      <div className="w-full">
+                        <UtilisationSecteursChart
+                          data={filteredEvents}
+                          matchCount={matchCountFiltered}
+                          teamName={selectedTeam}
+                          offenseField={offenseField}
+                          defenseField={defenseField}
+                        />
+                      </div>
+
+                      <div className="w-full">
+                        <EnclenchementsTable
+                          data={filteredEvents}
+                          matchCount={matchCountFiltered}
+                          teamName={selectedTeam}
+                          offenseField={offenseField}
+                          defenseField={defenseField}
+                        />
+                      </div>
+
+                      <div className="w-full mt-2">
+                        <CamembertChart
+                          data={filteredEvents}
+                          matchCount={matchCountFiltered}
+                          teamName={selectedTeam}
+                          offenseField={offenseField}
+                          defenseField={defenseField}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Gauges droite */}
+                    <div className="order-3 lg:col-span-2 flex flex-col gap-6">
+                      <GaugesPanel
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                        range="right"
+                      />
+                      <GaugesPanel
+                        data={filteredEvents}
+                        matchCount={matchCountFiltered}
+                        teamName={selectedTeam}
+                        offenseField={offenseField}
+                        defenseField={defenseField}
+                        range="bottom-right"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ===== Rapport individuel ===== */}
+            {!showHistorique && rapport === "individuel" && isUSDKSelected && (
+              <>
+                <div className="flex justify-center mb-4">
+                  <select
+                    onChange={(e) => setJoueuseId(e.target.value || null)}
+                    value={joueuseId || ""}
+                    className="border border-gray-300 text-black rounded-lg px-4 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                  >
+                    <option value="">Sélectionner un joueur</option>
+                    {joueusesFiltered.map((j) => (
+                      <option key={j.id} value={toIdKey(j.id)}>
+                        {j.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedJoueuse && (
+                  <div className="flex flex-col items-center gap-6">
+                    <Image
+                      src={driveToDirect(selectedJoueuse.photo_url) || "/placeholder.jpg"}
+                      alt={selectedJoueuse.nom}
+                      width={160}
+                      height={160}
+                      className="rounded-full shadow border object-cover"
+                    />
+                    <PlayerReportsPanel
+                      events={dataForIndividuel}
+                      jeLinks={jeLinks}
+                      match={selectedMatch}
+                      joueur={selectedJoueuse}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ===== Rapport gardien ===== */}
+            {rapport === "gardien" && isUSDKSelected && (
+              <>
+                <div className="flex justify-center mb-4">
+                  <select
+                    onChange={(e) => setGardienId(e.target.value || null)}
+                    value={gardienId || ""}
+                    className="border border-gray-300 text-black rounded-lg px-4 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
+                  >
+                    <option value="">Sélectionner un gardien</option>
+                    {gardiensOptions.map((g) => (
+                      <option key={toIdKey(g.id)} value={toIdKey(g.id)}>
+                        {g.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedGardien && (
+                  <div className="flex flex-col items-center gap-6">
+                    <Image
+                      src={driveToDirect(selectedGardien.photo_url) || "/placeholder.jpg"}
+                      alt={selectedGardien.nom}
+                      width={160}
+                      height={160}
+                      className="rounded-full shadow border object-cover"
+                    />
+
+                    {/* Layout GK */}
+                    <div className="w-full max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-stretch">
+                      {/* Col gauche : tables */}
+                      <div className="md:col-span-6 w-full h-full mt-[12px] md:mt-[20px]">
+                        <ImpactTablesGK data={dataForGKChart} gardien={selectedGardien} />
+                      </div>
+
+                      {/* Col droite : grille + terrain */}
+                      <div className="md:col-span-6 w-full h-full flex flex-col gap-6 mt-[12px] md:mt-[20px]">
+                        <div className="w-full">
+                          <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
+                        </div>
+                        <div className="w-full">
+                          {/* Laisse le composant gérer sa hauteur interne */}
+                          <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
+                        </div>
+                      </div>
+
+                      {/* Bas : camembert full width */}
+                      <div className="md:col-span-12 w-full">
+                        <CamembertChart data={dataForGKChart} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Historique */}
+        {!(!selectedTeam && matchId == null) && showHistorique && (
+          <div className="w-full flex flex-col items-center justify-center space-y-12">
+            <div className="w-full max-w-6xl">
+              <ProgressionTirsChart
+                data={filteredEvents}
+                matchCount={matchCountFiltered}
+                teamName={selectedTeam}
+                offenseField={offenseField}
+                defenseField={defenseField}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

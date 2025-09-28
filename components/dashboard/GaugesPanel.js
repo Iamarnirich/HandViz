@@ -9,9 +9,6 @@ import {
 import "react-circular-progressbar/dist/styles.css";
 import { useRapport } from "@/contexts/RapportContext";
 
-/* ===============================
-   OBJECTIFS (badges)
-   =============================== */
 const OBJECTIFS_GAUGES = {
   offensif: {
     "Eff. Globale": "55",
@@ -99,7 +96,7 @@ function getGaugeColor(label, value, rapport) {
   return value <= seuil - 5 ? "#B6D8F2" : value <= seuil ? "#9FCDA8" : "#F44336";
 }
 
-/* ===== Normalisation + helpers ===== */
+
 const norm = (s) =>
   (s || "")
     .toString()
@@ -108,7 +105,7 @@ const norm = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-// --- Helpers sûrs pour éviter les crashs ---
+
 const EMPTY_CELL = { num: 0, den: 0, pct: 0 };
 const safeRow = (arr, i) => (Array.isArray(arr) && arr[i]) ? arr[i] : {};
 const safeCell = (row, key) => (row && row[key]) ? row[key] : EMPTY_CELL;
@@ -151,7 +148,6 @@ const pickDefResMulti = (e, team) => {
   return rl || rc || "";
 };
 
-/* Possession parser + inférence adversaire */
 const parsePossession = (txt) => {
   const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
   return m ? { a: m[1].trim(), b: m[2].trim() } : null;
@@ -191,7 +187,7 @@ function inferOppForMatch(events, team) {
   return best;
 }
 
-/* Moyennes par match (robustes) */
+/* Moyennes par match */
 function avgPctAndCount(items) {
   const nAll = items.length || 1;
   let sumPct = 0, sumNum = 0, sumDen = 0;
@@ -199,7 +195,7 @@ function avgPctAndCount(items) {
   for (const it of items) {
     const n = Number(it?.num) || 0;
     const d = Number(it?.den) || 0;
-    const pct = d > 0 ? (Number(it?.pct) || 0) : 0; // 0% si pas de tentative
+    const pct = d > 0 ? (Number(it?.pct) || 0) : 0; 
     sumPct += pct;
     sumNum += n;
     sumDen += d;
@@ -207,7 +203,6 @@ function avgPctAndCount(items) {
   return { pct: sumPct / nAll, num: sumNum / nAll, den: sumDen / nAll, matches: nAll };
 }
 
-/* =========================  COMPOSANT  ============================= */
 export default function GaugesPanel({
   data,
   range = "all",

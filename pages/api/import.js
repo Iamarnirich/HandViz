@@ -2,9 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-/* =========================
-   Client Supabase (admin)
-   ========================= */
+
 const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !serviceRoleKey) {
@@ -16,9 +14,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
   global: { headers: { "x-application-name": "smart-hand-import" } },
 });
 
-/* =========================
-   Utils génériques
-   ========================= */
+
 const norm = (s) =>
   (s || "")
     .toString()
@@ -50,9 +46,7 @@ async function insertWithRetry(fn, { tries = 3, delayMs = 600 } = {}) {
   return { data: null, error: lastErr };
 }
 
-/* =========================
-   Dates & temps CSV
-   ========================= */
+
 function parseCsvDate(raw) {
   if (raw == null) return null;
 
@@ -128,9 +122,7 @@ function convertirTemps(val) {
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
-/* =========================
-   Normalisation d’une ligne CSV
-   ========================= */
+
 function normaliserRow(row, equipe_locale, equipe_visiteuse) {
   const keys = Object.keys(row || {});
   const lc = (k) => k.toLowerCase();
@@ -190,9 +182,6 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
   };
 }
 
-/* =========================
-   Clubs & Joueuses helpers
-   ========================= */
 async function ensureClubByName(nom) {
   if (!nom) return null;
 
@@ -225,7 +214,7 @@ async function buildPlayersMap(allNames, equipeByName, posteByName) {
   const names = Array.from(new Set(allNames.map((n) => (n || "").trim()).filter(Boolean)));
   if (names.length === 0) return new Map();
 
-  // 1) Récupérer celles qui existent déjà
+  // Récupérer celles qui existent déjà
   const { data: existing, error: exErr } = await supabase
     .from("joueuses")
     .select("id, nom")
@@ -238,7 +227,7 @@ async function buildPlayersMap(allNames, equipeByName, posteByName) {
   const map = new Map();
   (existing || []).forEach((j) => map.set(j.nom, j.id));
 
-  // 2) Insérer les manquantes en batch
+  // Insérer les manquantes en batch
   const missing = names.filter((n) => !map.has(n));
   if (missing.length) {
     const toInsert = missing.map((nom) => ({
@@ -262,9 +251,6 @@ async function buildPlayersMap(allNames, equipeByName, posteByName) {
   return map;
 }
 
-/* =========================
-   Handler principal
-   ========================= */
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -302,7 +288,7 @@ export default async function handler(req, res) {
     let created = false;
     let updated = false;
 
-    // 1) par nom
+    // par nom
     {
       const { data: byName } = await supabase
         .from("matchs")
@@ -312,7 +298,7 @@ export default async function handler(req, res) {
       if (byName?.id) match_id = byName.id;
     }
 
-    // 2) par fenêtre de date + équipes
+    //par date + équipes
     if (!match_id) {
       const start = new Date(Date.UTC(
         parsedDate.getUTCFullYear(),
@@ -387,9 +373,7 @@ export default async function handler(req, res) {
       })
       .eq("id", match_id);
 
-    /* ======================================================
-       Préparer tous les enregistrements
-       ====================================================== */
+    // Préparer les événements à insérer
     const normalized = rows.map((r) => normaliserRow(r, equipe_locale, equipe_visiteuse));
     const eventsPayload = normalized.map((row) => {
       const temps_de_jeu = convertirTemps(row.temps_de_jeu);
@@ -439,7 +423,7 @@ export default async function handler(req, res) {
       console.warn("Nombre d'événements insérés différent du payload – mapping par index.");
     }
 
-    // 2) Construire la liste de toutes les joueuses citées & créer une map nom->id
+    //Construire la liste de toutes les joueuses citées & créer une map nom->id
     const equipeByName = new Map();
     const posteByName = new Map();
     const allNames = [];
@@ -473,7 +457,7 @@ export default async function handler(req, res) {
 
     const playersMap = await buildPlayersMap(allNames, equipeByName, posteByName);
 
-    // 3) Construire les liens joueuses_evenements (puis insérer en batch)
+    // Construire les liens joueuses_evenements (puis insérer en batch)
     const links = [];
     // on mappe chaque ligne à l’ID retourné à la même position (les insert PostgREST gardent l’ordre)
     for (let i = 0; i < normalized.length; i++) {
@@ -522,7 +506,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       message: created
-        ? "Match créé + événements importés"
+        ? "Match importé avec succès"
         : "Match mis à jour (événements remplacés)",
       match_id,
       inserted_events: allInsertedEvents.length,

@@ -176,11 +176,17 @@ export default function TerrainHandballGK({ data, gardien }) {
   }, [data, gardien]);
 
   return (
-    <div className="relative w-full h-full max-h-[580px] rounded-2xl overflow-hidden shadow-lg border border-[#E4CDA1] bg-white">
+    <div className={
+        // Hauteur garantie + ratio réactif
+        "relative w-full aspect-[12/8] md:aspect-[12/7] lg:aspect-[18/10] " +
+        "min-h-[520px] md:min-h-[480px] max-h-[740px] " +
+        "rounded-2xl overflow-hidden shadow-lg border border-[#E4CDA1] bg-white"
+    }>
       <Image
         src="/terrainHandball.png"
         alt="Demi-terrain"
         fill
+        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 70vw, 50vw"
         className="object-contain"
         priority
       />

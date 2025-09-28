@@ -138,7 +138,7 @@ export default function ImpactGridGK({ data, gardien }) {
   }, [data, gardien]);
 
   return (
-    <div className="w-full max-w-xl mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-2xl shadow-lg border border-[#E4CDA1]">
+    <div className="w-full max-w-sm mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-2xl shadow-lg border border-[#E4CDA1]">
       {IMPACT_GRID.flat().map((zone, i) => {
         const key = norm(zone);
         const s = stats[key] || { total: 0, saves: 0 };

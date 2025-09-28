@@ -141,7 +141,7 @@ export default function ImpactGrid({
   }, [data, rapport, isTousLesMatchs, teamName, offenseField, defenseField, equipeLocale]);
 
   return (
-    <div className="w-full max-w-xl mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-xl shadow-lg mb-4">
+    <div className="w-full max-w-sm mx-auto grid grid-cols-3 grid-rows-3 gap-3 p-4 bg-white rounded-xl shadow-lg mb-4">
       {IMPACT_GRID.flat().map((zone, idx) => {
         const key = norm(zone);
         const stats = impactStats[key] || { tirs: 0, buts: 0 };
