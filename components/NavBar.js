@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
-import Image from "next/image";
 
 export default function NavBar() {
   const [connected, setConnected] = useState(false);

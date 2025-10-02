@@ -39,9 +39,6 @@ function bucketZone(raw) {
   if (x.includes("milieu") && x.includes("gauche")) return "milieu gauche";
   if (x === "milieu") return "milieu";
   if (x.includes("milieu") && x.includes("droite")) return "milieu droite";
-
-  // fallback
-  return "milieu";
 }
 
 function parseOutcomeFromResultCTHB(resultat_cthb) {

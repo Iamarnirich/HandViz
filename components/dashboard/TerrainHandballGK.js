@@ -14,6 +14,7 @@ const secteurs = {
   ARD: { top: "55%", left: "85%" },
   ARG: { top: "55%", left: "15%" },
   "7M": { label: "7m", top: "80%", left: "50%" },
+  "But Vide": { label: "But vide", top: "80%", left: "75%" },
 };
 
 const norm = (s) =>
@@ -39,6 +40,7 @@ function canonicalizeSecteur(raw) {
     ["arg", "ARG"],
     ["ard", "ARD"],
     ["7m", "7M"],
+    ["but vide", "But Vide"],
   ]);
   return table.get(x) || raw || "";
 }
