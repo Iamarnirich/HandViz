@@ -27,6 +27,35 @@ const VIEW_GARDIEN = "v_gardien_match_events";
 const toIdKey = (v) => (v == null ? "" : String(v));
 const norm = (s) => (s || "").toLowerCase().trim();
 
+// ===== Pagination robuste Supabase =====
+async function fetchAllRows({
+  table,
+  select = "*",
+  orderBy = "id",      // colonne d’ordre STABLE (indexée si possible)
+  asc = true,
+  pageSize = 5000,     // ajuste si besoin
+  mutateQuery,         // (q) => q.filter(...).eq(...).gte(...), etc.
+}) {
+  let from = 0;
+  const all = [];
+
+  for (;;) {
+    let q = supabase.from(table).select(select).order(orderBy, { ascending: asc });
+    if (mutateQuery) q = mutateQuery(q);
+
+    const { data, error } = await q.range(from, from + pageSize - 1);
+    if (error) throw error;
+
+    const chunk = data || [];
+    all.push(...chunk);
+
+    if (chunk.length < pageSize) break; // dernière page atteinte
+    from += pageSize;
+  }
+  return all;
+}
+
+
 // Convertit un lien Drive (view ou ?id=) en /uc?id=...
 function driveToDirect(url) {
   if (!url) return url;
@@ -85,46 +114,72 @@ function DashboardLayout() {
     async function fetchAll() {
       try {
         const [
-          { data: matchsData },
-          { data: evenementsData },
-          { data: clubsData },
-          { data: joueusesData },
-          { data: jeData },
+          matchsData,
+          evenementsData,
+          clubsData,
+          joueusesData,
+          jeData,
         ] = await Promise.all([
-          supabase
-            .from("matchs")
-            .select(
-              "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match, journee"
-            )
-            .order("date_match", { ascending: false }),
-          supabase.from("evenements").select("*").range(0, 50000),
-          supabase.from("clubs").select("id, nom, logo"),
-          supabase.from("joueuses").select("id, nom, photo_url, equipe, poste"),
-          supabase
-            .from("joueuses_evenements")
-            .select(
-              "id, id_evenement, id_joueuse, nom_joueuse, joueur_plus_cthb, joueur_minus_cthb, joueur_minus_cthb_prime"
-            )
-            .range(0, 20000),
+          // On ordonne par id pour paginer sans trous, et on triera par date pour l’affichage si besoin
+          fetchAllRows({
+            table: "matchs",
+            select: "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match, journee",
+            orderBy: "id", // IMPORTANT: clé stable
+          }),
+
+          fetchAllRows({
+            table: "evenements",
+            select: "*",
+            orderBy: "id", // IMPORTANT
+          }),
+
+          fetchAllRows({
+            table: "clubs",
+            select: "id, nom, logo",
+            orderBy: "id",
+          }),
+
+          fetchAllRows({
+            table: "joueuses",
+            select: "id, nom, photo_url, equipe, poste",
+            orderBy: "id",
+          }),
+
+          fetchAllRows({
+            table: "joueuses_evenements",
+            select: "id, id_evenement, id_joueuse, nom_joueuse, joueur_plus_cthb, joueur_minus_cthb, joueur_minus_cthb_prime",
+            orderBy: "id",
+          }),
         ]);
+
+        // Si tu veux l’affichage des matchs du plus récent au plus ancien :
+        matchsData.sort((a, b) => String(b.date_match || "").localeCompare(String(a.date_match || "")));
+
 
         // Vues (en silence si absentes)
         let viewIndiv = [];
         let viewGK = [];
+
         try {
-          const { data: vi } = await supabase
-            .from(VIEW_INDIVIDUEL)
-            .select("*")
-            .range(0, 50000);
-          viewIndiv = vi || [];
-        } catch {}
+          viewIndiv = await fetchAllRows({
+            table: VIEW_INDIVIDUEL,
+            select: "*",
+            orderBy: "id_evenement",  // ou la colonne stable présente dans ta vue
+            asc: true,
+            pageSize: 5000,
+          });
+        } catch { viewIndiv = []; }
+
         try {
-          const { data: vg } = await supabase
-            .from(VIEW_GARDIEN)
-            .select("*")
-            .range(0, 50000);
-          viewGK = vg || [];
-        } catch {}
+          viewGK = await fetchAllRows({
+            table: VIEW_GARDIEN,
+            select: "*",
+            orderBy: "id_evenement",  // idem
+            asc: true,
+            pageSize: 5000,
+          });
+        } catch { viewGK = []; }
+
 
         const clubsMap = {};
         (clubsData || []).forEach((c) => {

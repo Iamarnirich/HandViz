@@ -8,7 +8,6 @@ const IMPACT_GRID = [
   ["bas gauche", "bas milieu", "bas droite"],
 ];
 
-// Normalisation robuste (minuscules + accents retirés + trim)
 const norm = (s) =>
   (s || "")
     .toString()
@@ -24,114 +23,64 @@ const getColor = (eff) => {
   return "bg-[#dfe6e9] text-black";
 };
 
-/** Déduit l’adversaire le plus probable à partir des textes d’événements */
-function inferOppTeam(data, team) {
-  if (!team) return "";
-  const counts = new Map();
-  const bump = (name) => {
-    const k = norm(name);
-    if (!k || k === team) return;
-    counts.set(k, (counts.get(k) || 0) + 1);
-  };
 
-  const rx = /^(but|tir|perte(?:\s+de\s+balle)?|7m\s+obtenu)\s+([^\s]+)/i;
+function bucketZone(raw) {
+  const flat = IMPACT_GRID.flat();
+  const x = norm(raw);
+  const hit = flat.find((lab) => norm(lab) === x);
+  if (hit) return hit;
 
-  (data || []).forEach((e) => {
-    const rc = norm(e?.resultat_cthb);
-    const rl = norm(e?.resultat_limoges);
-    const ma = norm(e?.nom_action);
-    const poss = norm(e?.possession);
+  if (x.includes("haut") && x.includes("gauche")) return "Haut gauche";
+  if (x.includes("haut") && x.includes("milieu")) return "Haut milieu";
+  if (x.includes("haut") && x.includes("droite")) return "Haut droite";
+  if (x.includes("bas") && x.includes("gauche")) return "bas gauche";
+  if (x.includes("bas") && x.includes("milieu")) return "bas milieu";
+  if (x.includes("bas") && x.includes("droite")) return "bas droite";
+  if (x.includes("milieu") && x.includes("gauche")) return "milieu gauche";
+  if (x === "milieu") return "milieu";
+  if (x.includes("milieu") && x.includes("droite")) return "milieu droite";
 
-    [rc, rl].forEach((r) => {
-      const m = r.match(rx);
-      if (m && m[2]) bump(m[2]);
-    });
+  // fallback
+  return "milieu";
+}
 
-    const mA = ma.match(/^(attaque|ca|er|mb|transition)\s+([^\s]+)/i);
-    if (mA && mA[2]) bump(mA[2]);
+function parseOutcomeFromResultCTHB(resultat_cthb) {
+  const r = norm(resultat_cthb);
 
-    const mP = poss.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
-    if (mP) {
-      const t1 = norm(mP[1]);
-      const t2 = norm(mP[2]);
-      if (t1 === team) bump(t2);
-      if (t2 === team) bump(t1);
-    }
-  });
+  if (r === "def usdk arrete" || r === "def usdk arret") return "SAVE";
+  if (r === "but encaisse usdk" || r === "but encaissé usdk") return "GOAL";
+  if (r === "def usdk hc") return "WIDE";
+  if (r === "def usdk contre" || r === "def usdk contree") return "BLOCK";
 
-  let best = "";
-  let max = 0;
-  counts.forEach((v, k) => {
-    if (v > max) {
-      max = v;
-      best = k;
-    }
-  });
-  return best;
+  return null;
 }
 
 export default function ImpactGridGK({ data, gardien }) {
   const stats = useMemo(() => {
     const byImpact = {};
-    const add = (impactRaw, { isSave, isShot }) => {
-      const k = norm(impactRaw);
-      if (!k) return;
+    const ensure = (label) => {
+      const k = norm(label);
       if (!byImpact[k]) byImpact[k] = { total: 0, saves: 0 };
-      if (isShot) byImpact[k].total += 1;
-      if (isSave) byImpact[k].saves += 1;
+      return byImpact[k];
     };
 
+    IMPACT_GRID.flat().forEach((lab) => ensure(lab));
+
     const gkName = norm(gardien?.nom);
-    const team = norm(gardien?.equipe);
-    if (!gkName || !team) return byImpact;
-
-    // Adversaire déduit depuis le dataset
-    const opp = inferOppTeam(data, team);
-
-    // Prépare des regex “team-aware” (accents déjà normalisés)
-    const reSaveTeam = new RegExp(`^tir\\s+arrete\\s+${team}$`);
-    const reGoalOpp = opp ? new RegExp(`^but\\s+${opp}$`) : null;
-    const reWideOpp = opp ? new RegExp(`^tir\\s+hc\\s+${opp}$`) : null;
-    const reBlockOpp = opp ? new RegExp(`^tir\\s+(?:contre|contre)\\s+${opp}$`) : null;
+    if (!gkName) return byImpact;
 
     (data || []).forEach((e) => {
-      // 1) L’événement doit concerner CE gardien
-      const gkCTHB = norm(e?.gb_cthb);
-      const gkADV = norm(e?.gb_adv);
-      const isThisGK = gkCTHB === gkName || gkADV === gkName;
-      if (!isThisGK) return;
+      if (norm(e?.gb_cthb) !== gkName) return;
 
-      // 2) Impact
-      const impact =
-        e?.impact ??
-        e?.secteur ??
-        e?.zone_impact ??
-        "";
-      if (!impact) return;
+      const outcome = parseOutcomeFromResultCTHB(e?.resultat_cthb);
+      if (!outcome) return;
 
-      // 3) Lire séparément les deux colonnes de résultat (NE PAS concaténer)
-      const rc = norm(e?.resultat_cthb);
-      const rl = norm(e?.resultat_limoges);
+      const zoneLabel = bucketZone(e?.impact || e?.secteur || e?.position);
+      const slot = ensure(zoneLabel);
 
-      // 4) Classement team-aware
-      const colMatches = (txt, re) => !!(txt && re && re.test(txt));
 
-      // Arrêt = “tir arreté TEAM”
-      const isSave =
-        colMatches(rc, reSaveTeam) || colMatches(rl, reSaveTeam);
-
-      // But/HC/Contré = côté adversaire
-      const isGoal =
-        (reGoalOpp && (colMatches(rc, reGoalOpp) || colMatches(rl, reGoalOpp))) || false;
-      const isWide =
-        (reWideOpp && (colMatches(rc, reWideOpp) || colMatches(rl, reWideOpp))) || false;
-      const isBlock =
-        (reBlockOpp && (colMatches(rc, reBlockOpp) || colMatches(rl, reBlockOpp))) || false;
-
-      const isShot = isSave || isGoal || isWide || isBlock;
-      if (!isShot) return;
-
-      add(impact, { isSave, isShot });
+      slot.total += 1;                 // tir tenté
+      if (outcome === "SAVE") slot.saves += 1; // arrêt
     });
 
     return byImpact;
@@ -148,10 +97,12 @@ export default function ImpactGridGK({ data, gardien }) {
         return (
           <div
             key={i}
-            className={`aspect-[3/1] rounded-lg flex items-center justify-center text-[15px] font-extrabold ${bg} shadow-sm hover:shadow transition-shadow`}
-            title={`${zone} • ${s.saves}/${s.total} (${Math.round(eff)}%)`}
+            className={`aspect-[3/1] rounded-lg flex flex-col items-center justify-center text-[14px] font-semibold ${bg} shadow-sm hover:shadow transition-shadow`}
+            title={`${zone} • Arrêts ${s.saves} / Tirs ${s.total} (${Math.round(eff)}%)`}
           >
-            {s.saves} / {s.total}
+            <span className="text-[15px] font-extrabold">
+              {s.saves} / {s.total}
+            </span>
           </div>
         );
       })}

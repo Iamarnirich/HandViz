@@ -3,7 +3,6 @@
 import Image from "next/image";
 import { useMemo } from "react";
 
-/* ————— Carte des positions affichées ————— */
 const secteurs = {
   ALG: { top: "10%", left: "15%" },
   ALD: { top: "10%", left: "85%" },
@@ -17,7 +16,6 @@ const secteurs = {
   "7M": { label: "7m", top: "80%", left: "50%" },
 };
 
-/* ————— Helpers de normalisation ————— */
 const norm = (s) =>
   (s || "")
     .toString()
@@ -26,85 +24,46 @@ const norm = (s) =>
     .toLowerCase()
     .trim();
 
-/* Regroupe les alias possibles de secteur vers nos clés d’affichage */
 function canonicalizeSecteur(raw) {
   const x = norm(raw);
   if (!x) return "";
-  const table = new Map(
-    [
-      // clés officielles
-      ...Object.keys(secteurs).map((k) => [norm(k), k]),
-      // alias fréquents côté source
-      ["alg", "ALG"],
-      ["ald", "ALD"],
-      ["12g", "1-2G"],
-      ["12d", "1-2D"],
-      ["central 6m", "Central 6m"],
-      ["central 7-9m", "Central 7-9m"],
-      ["central 9m", "Central 9m"],
-      ["arg", "ARG"],
-      ["ard", "ARD"],
-      ["7m", "7M"],
-    ]
-  );
+  const table = new Map([
+    ...Object.keys(secteurs).map((k) => [norm(k), k]),
+    ["alg", "ALG"],
+    ["ald", "ALD"],
+    ["12g", "1-2G"],
+    ["12d", "1-2D"],
+    ["central 6m", "Central 6m"],
+    ["central 7-9m", "Central 7-9m"],
+    ["central 9m", "Central 9m"],
+    ["arg", "ARG"],
+    ["ard", "ARD"],
+    ["7m", "7M"],
+  ]);
   return table.get(x) || raw || "";
 }
 
-/* Couleur (même barème que le reste) */
 const colorForEff = (eff) => {
   if (eff >= 70) return "bg-[#9FCDA8]";
   if (eff >= 45) return "bg-[#FFD4A1]";
-  if (eff > 0)  return "bg-[#FFBFB0]";
+  if (eff > 0) return "bg-[#FFBFB0]";
   return "bg-gray-300";
 };
 
-/* ————— Déduction de l’adversaire à partir du dataset ————— */
-function inferOppTeam(data, team) {
-  if (!team) return "";
-  const counts = new Map();
-  const bump = (name) => {
-    const k = norm(name);
-    if (!k || k === team) return;
-    counts.set(k, (counts.get(k) || 0) + 1);
-  };
 
-  const rxRes = /^(but|tir|perte(?:\s+de\s+balle)?|7m\s+obtenu)\s+([^\s]+)/i;
-
-  (data || []).forEach((e) => {
-    const rc = norm(e?.resultat_cthb);
-    const rl = norm(e?.resultat_limoges);
-    const act = norm(e?.nom_action);
-    const poss = norm(e?.possession);
-
-    [rc, rl].forEach((r) => {
-      const m = r.match(rxRes);
-      if (m && m[2]) bump(m[2]);
-    });
-
-    const mA = act.match(/^(attaque|ca|er|mb|transition)\s+([^\s]+)/i);
-    if (mA && mA[2]) bump(mA[2]);
-
-    const mP = poss.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
-    if (mP) {
-      const t1 = norm(mP[1]);
-      const t2 = norm(mP[2]);
-      if (t1 === team) bump(t2);
-      if (t2 === team) bump(t1);
-    }
-  });
-
-  let best = "";
-  let max = 0;
-  counts.forEach((v, k) => { if (v > max) { max = v; best = k; } });
-  return best;
+function parseOutcome(resultat_cthb) {
+  const r = norm(resultat_cthb);
+  if (r === "def usdk arrete" || r === "def usdk arret") return "SAVE";
+  if (r === "but encaisse usdk" || r === "but encaissé usdk" || r === "but encaissé usdk")
+    return "GOAL";
+  if (r === "def usdk hc") return "WIDE";
+  if (r === "def usdk contre" || r === "def usdk contree" || r === "def usdk contré")
+    return "BLOCK";
+  return null;
 }
-
-/* Petit utilitaire: teste un RegExp sur un texte normalisé */
-const matchN = (txt, re) => !!(txt && re && re.test(norm(txt)));
 
 export default function TerrainHandballGK({ data, gardien }) {
   const bySecteur = useMemo(() => {
-    // Agrégat: secteur -> { total: tirs, saves: arrêts }
     const out = new Map();
     const ensure = (k) => {
       if (!out.has(k)) out.set(k, { total: 0, saves: 0 });
@@ -112,84 +71,59 @@ export default function TerrainHandballGK({ data, gardien }) {
     };
 
     const gkName = norm(gardien?.nom);
-    const gkTeam = norm(gardien?.equipe);
-    if (!gkName || !gkTeam) return Object.fromEntries(out);
+    if (!gkName) return Object.fromEntries(out);
 
-    const opp = inferOppTeam(data, gkTeam);
-
-    // Regex “team-aware”
-    const reSaveTeam = new RegExp(`^tir\\s+arrete\\s+${gkTeam}$`);
-    const reEncTeam  = new RegExp(`^but\\s+encaisse(?:\\s+${gkTeam})?$`);
-    const reGoalOpp  = opp ? new RegExp(`^but\\s+${opp}$`) : null;
-    const reWideOpp  = opp ? new RegExp(`^tir\\s+hc\\s+${opp}$`) : null;
-    const reBlockOpp = opp ? new RegExp(`^tir\\s+contre\\s+${opp}$`) : null;
-
-    // Anti-doublons (si même tir présent via la vue et la table brute)
+    // anti-doublons naïf
     const seen = new Set();
 
     (data || []).forEach((e) => {
-      // 1) Le gardien doit matcher gb_cthb ou gb_adv
-      const gkCTHB = norm(e?.gb_cthb);
-      const gkADV  = norm(e?.gb_adv);
-      const isThisGK = gkCTHB === gkName || gkADV === gkName;
-      if (!isThisGK) return;
+      if (norm(e?.gb_cthb) !== gkName) return;
 
-      // 2) Clé anti-dup
+      const outcome = parseOutcome(e?.resultat_cthb);
+      if (!outcome) return;
+
       const key =
         (e?.id ?? "") +
-        "|" + (e?.id_match ?? "") +
-        "|" + (e?.nom_action ?? "") +
-        "|" + (e?.resultat_cthb ?? "") +
-        "|" + (e?.resultat_limoges ?? "") +
-        "|" + (e?.secteur ?? e?.zone_impact ?? e?.position ?? "");
+        "|" +
+        (e?.id_match ?? "") +
+        "|" +
+        (e?.nom_action ?? "") +
+        "|" +
+        (e?.resultat_cthb ?? "") +
+        "|" +
+        (e?.secteur ?? e?.zone_impact ?? e?.position ?? "");
       if (seen.has(key)) return;
       seen.add(key);
 
-      // 3) Lire séparément les deux colonnes
-      const rc = e?.resultat_cthb || "";
-      const rl = e?.resultat_limoges || "";
-
-      // 4) Classer l’événement tir côté GK
-      const isSave =
-        matchN(rc, reSaveTeam) || matchN(rl, reSaveTeam);
-      const isConceded =
-        matchN(rc, reEncTeam) || matchN(rl, reEncTeam) ||
-        (reGoalOpp && (matchN(rc, reGoalOpp) || matchN(rl, reGoalOpp)));
-      const isWide   = reWideOpp  && (matchN(rc, reWideOpp)  || matchN(rl, reWideOpp));
-      const isBlock  = reBlockOpp && (matchN(rc, reBlockOpp) || matchN(rl, reBlockOpp));
-
-      const isShot = isSave || isConceded || isWide || isBlock;
-      if (!isShot) return;
-
-      // 5) Secteur
-      const secteurRaw =
-        e?.secteur ?? e?.zone_impact ?? e?.position ?? "";
+      const secteurRaw = e?.secteur ?? e?.zone_impact ?? e?.position ?? "";
       const keySec = canonicalizeSecteur(secteurRaw);
-      if (!keySec || !secteurs[keySec]) return; // on ignore les zones inconnues
+      if (!keySec || !secteurs[keySec]) return;
 
       const slot = ensure(keySec);
-      slot.total += 1;
-      if (isSave) slot.saves += 1;
+      slot.total += 1; // SAVE/GOAL/WIDE/BLOCK sont des tirs tentés
+      if (outcome === "SAVE") slot.saves += 1;
     });
 
     return Object.fromEntries(out);
   }, [data, gardien]);
 
   return (
-    <div className={
-        // Hauteur garantie + ratio réactif
+    <div
+      className={
         "relative w-full aspect-[12/8] md:aspect-[12/7] lg:aspect-[18/10] " +
         "min-h-[520px] md:min-h-[480px] max-h-[740px] " +
         "rounded-2xl overflow-hidden shadow-lg border border-[#E4CDA1] bg-white"
-    }>
+      }
+    >
       <Image
-        src="/terrainHandball.png"
+        src="/terrainHandball.png" 
         alt="Demi-terrain"
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 70vw, 50vw"
         className="object-contain"
         priority
       />
+
       {Object.entries(secteurs).map(([key, pos]) => {
         const s = bySecteur[key];
         if (!s || !s.total) return null;
@@ -209,7 +143,9 @@ export default function TerrainHandballGK({ data, gardien }) {
             title={`${key} • ${s.saves}/${s.total} (${Math.round(eff)}%)`}
           >
             {"label" in pos ? (
-              <div className="text-[11px] font-bold leading-tight mb-0.5">{pos.label}</div>
+              <div className="text-[11px] font-bold leading-tight mb-0.5">
+                {pos.label}
+              </div>
             ) : null}
             <div className="text-[15px] leading-tight">
               {s.saves}/{s.total} — {Math.round(eff)}%

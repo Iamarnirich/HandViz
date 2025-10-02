@@ -2,7 +2,6 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-
 const supabaseUrl = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseUrl || !serviceRoleKey) {
@@ -13,7 +12,6 @@ const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false },
   global: { headers: { "x-application-name": "smart-hand-import" } },
 });
-
 
 const norm = (s) =>
   (s || "")
@@ -45,7 +43,6 @@ async function insertWithRetry(fn, { tries = 3, delayMs = 600 } = {}) {
   }
   return { data: null, error: lastErr };
 }
-
 
 function parseCsvDate(raw) {
   if (raw == null) return null;
@@ -96,7 +93,9 @@ function excelSerialToUTC(serial) {
 }
 
 function toUTCDateAtMidnight(d) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+  return new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0)
+  );
 }
 
 function clampDateReasonable(d) {
@@ -110,18 +109,28 @@ function convertirTemps(val) {
   if (!val) return "00:00:00";
   const str = String(val).trim();
   const parts = str.split(":").map((x) => Number(x));
-  let h = 0, m = 0, s = 0;
-  if (parts.length === 2) { m = parts[0]; s = parts[1]; }
-  else if (parts.length === 3) { h = parts[0]; m = parts[1]; s = parts[2]; }
+  let h = 0,
+    m = 0,
+    s = 0;
+  if (parts.length === 2) {
+    m = parts[0];
+    s = parts[1];
+  } else if (parts.length === 3) {
+    h = parts[0];
+    m = parts[1];
+    s = parts[2];
+  }
   h += Math.floor(m / 60);
   m = m % 60;
   h += Math.floor(s / 3600);
   m += Math.floor((s % 3600) / 60);
   s = s % 60;
-  if (m >= 60) { h += Math.floor(m / 60); m = m % 60; }
+  if (m >= 60) {
+    h += Math.floor(m / 60);
+    m = m % 60;
+  }
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
-
 
 function normaliserRow(row, equipe_locale, equipe_visiteuse) {
   const keys = Object.keys(row || {});
@@ -133,17 +142,37 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
       return patterns.some((p) => L.includes(p)) && L.includes(team.toLowerCase());
     });
 
-  const col_cthb = keys.find((k) => lc(k).includes("résultats") && lc(k).includes(equipe_locale.toLowerCase()));
-  const col_adv  = keys.find((k) => lc(k).includes("résultats") && lc(k).includes(equipe_visiteuse.toLowerCase()));
-  const col_j_cthb = keys.find((k) => lc(k).includes("joueurs") && lc(k).includes(equipe_locale.toLowerCase()));
-  const col_j_adv  = keys.find((k) => lc(k).includes("joueurs") && lc(k).includes(equipe_visiteuse.toLowerCase()));
-  const col_gb_cthb = keys.find((k) => lc(k).includes("gb") && lc(k).includes(equipe_locale.toLowerCase()));
-  const col_gb_adv  = keys.find((k) => lc(k).includes("gb") && lc(k).includes(equipe_visiteuse.toLowerCase()));
+  const col_cthb = keys.find(
+    (k) => lc(k).includes("résultats") && lc(k).includes(equipe_locale.toLowerCase())
+  );
+  const col_adv = keys.find(
+    (k) => lc(k).includes("résultats") && lc(k).includes(equipe_visiteuse.toLowerCase())
+  );
+  const col_j_cthb = keys.find(
+    (k) => lc(k).includes("joueurs") && lc(k).includes(equipe_locale.toLowerCase())
+  );
+  const col_j_adv = keys.find(
+    (k) => lc(k).includes("joueurs") && lc(k).includes(equipe_visiteuse.toLowerCase())
+  );
+  const col_gb_cthb = keys.find(
+    (k) => lc(k).includes("gb") && lc(k).includes(equipe_locale.toLowerCase())
+  );
+  const col_gb_adv = keys.find(
+    (k) => lc(k).includes("gb") && lc(k).includes(equipe_visiteuse.toLowerCase())
+  );
 
-  const col_joueur_minus_cthb       = findCol(equipe_locale, "joueur - ");
-  const col_joueur_minus_cthb_prime = findCol(equipe_locale, "joueur -'", "joueur -’");
-  const col_joueur_plus_cthb        = findCol(equipe_locale, "joueur + ");
-  const col_joueur_plus_adv_prime   = findCol(equipe_visiteuse, "joueur +'", "joueur +’");
+  const col_joueur_minus_cthb = findCol(equipe_locale, "joueur - ");
+  const col_joueur_minus_cthb_prime = findCol(
+    equipe_locale,
+    "joueur -'",
+    "joueur -’"
+  );
+  const col_joueur_plus_cthb = findCol(equipe_locale, "joueur + ");
+  const col_joueur_plus_adv_prime = findCol(
+    equipe_visiteuse,
+    "joueur +'",
+    "joueur +’"
+  );
 
   return {
     nom_action: String(row["Nom"] || row["nom"] || "").trim(),
@@ -166,19 +195,30 @@ function normaliserRow(row, equipe_locale, equipe_visiteuse) {
     temps_fort: String(row["Temps Fort"] || row["temps_fort"] || "").trim(),
     sanctions: String(row["Sanctions"] || row["sanctions"] || "").trim(),
     gb_cthb: col_gb_cthb ? String(row[col_gb_cthb] || "").trim() : "",
-    gb_adv:  col_gb_adv  ? String(row[col_gb_adv]  || "").trim()  : "",
+    gb_adv: col_gb_adv ? String(row[col_gb_adv] || "").trim() : "",
     nom_joueuse_cthb: col_j_cthb ? String(row[col_j_cthb] || "").trim() : "",
-    nom_joueuse_adv:  col_j_adv  ? String(row[col_j_adv]  || "").trim()  : "",
+    nom_joueuse_adv: col_j_adv ? String(row[col_j_adv] || "").trim() : "",
     poste: String(row["Poste"] || row["poste"] || "").trim(),
     arbitres: String(row["Arbitres"] || row["arbitres"] || "").trim(),
     passe_decisive: String(
-      row["Passe décisive USDK"] || row["Passe décisive"] || row["passe_decisive"] || ""
+      row["Passe décisive USDK"] ||
+        row["Passe décisive"] ||
+        row["passe_decisive"] ||
+        ""
     ).trim(),
     journee: String(row["Journée"] || row["Journee"] || row["journee"] || "").trim(),
-    joueur_minus_cthb:       col_joueur_minus_cthb ? String(row[col_joueur_minus_cthb] || "").trim() : "",
-    joueur_minus_cthb_prime: col_joueur_minus_cthb_prime ? String(row[col_joueur_minus_cthb_prime] || "").trim() : "",
-    joueur_plus_cthb:        col_joueur_plus_cthb ? String(row[col_joueur_plus_cthb] || "").trim() : "",
-    joueur_plus_adv_prime:   col_joueur_plus_adv_prime ? String(row[col_joueur_plus_adv_prime] || "").trim() : "",
+    joueur_minus_cthb: col_joueur_minus_cthb
+      ? String(row[col_joueur_minus_cthb] || "").trim()
+      : "",
+    joueur_minus_cthb_prime: col_joueur_minus_cthb_prime
+      ? String(row[col_joueur_minus_cthb_prime] || "").trim()
+      : "",
+    joueur_plus_cthb: col_joueur_plus_cthb
+      ? String(row[col_joueur_plus_cthb] || "").trim()
+      : "",
+    joueur_plus_adv_prime: col_joueur_plus_adv_prime
+      ? String(row[col_joueur_plus_adv_prime] || "").trim()
+      : "",
   };
 }
 
@@ -206,15 +246,12 @@ async function ensureClubByName(nom) {
   return created.id;
 }
 
-/**
- * Prépare une map nom -> id pour toutes les joueuses mentionnées dans le CSV.
- * Évite une requête par nom.
- */
 async function buildPlayersMap(allNames, equipeByName, posteByName) {
-  const names = Array.from(new Set(allNames.map((n) => (n || "").trim()).filter(Boolean)));
+  const names = Array.from(
+    new Set(allNames.map((n) => (n || "").trim()).filter(Boolean))
+  );
   if (names.length === 0) return new Map();
 
-  // Récupérer celles qui existent déjà
   const { data: existing, error: exErr } = await supabase
     .from("joueuses")
     .select("id, nom")
@@ -227,7 +264,6 @@ async function buildPlayersMap(allNames, equipeByName, posteByName) {
   const map = new Map();
   (existing || []).forEach((j) => map.set(j.nom, j.id));
 
-  // Insérer les manquantes en batch
   const missing = names.filter((n) => !map.has(n));
   if (missing.length) {
     const toInsert = missing.map((nom) => ({
@@ -237,8 +273,8 @@ async function buildPlayersMap(allNames, equipeByName, posteByName) {
     }));
     const batches = chunk(toInsert, 500);
     for (const b of batches) {
-      const { data, error } = await insertWithRetry(
-        () => supabase.from("joueuses").insert(b).select("id, nom")
+      const { data, error } = await insertWithRetry(() =>
+        supabase.from("joueuses").insert(b).select("id, nom")
       );
       if (error) {
         console.warn("Insertion joueuses manquantes échouée:", error?.message);
@@ -255,40 +291,53 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   try {
-    const payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const payload =
+      typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const { matchNom, rows } = payload || {};
     if (!matchNom || !rows || !Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: "Données invalides reçues." });
     }
 
-    // Extraire équipes depuis la colonne Match
+    // Extraire équipes
     const rawMatch = rows[0]?.["Match"] || rows[0]?.["match"];
     if (!rawMatch || !rawMatch.includes(";")) {
-      return res.status(400).json({ error: "Impossible de déterminer les équipes depuis la colonne Match." });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Impossible de déterminer les équipes depuis la colonne Match.",
+        });
     }
 
-    let [equipe_locale, equipe_visiteuse] = rawMatch.split(";").map((s) => String(s || "").trim());
+    let [equipe_locale, equipe_visiteuse] = rawMatch
+      .split(";")
+      .map((s) => String(s || "").trim());
     if (!looksLikeUSDK(equipe_locale) && looksLikeUSDK(equipe_visiteuse)) {
       const tmp = equipe_locale;
       equipe_locale = equipe_visiteuse;
       equipe_visiteuse = tmp;
     }
     if (!equipe_locale || !equipe_visiteuse) {
-      return res.status(400).json({ error: "Les noms des équipes sont manquants dans la colonne Match." });
+      return res
+        .status(400)
+        .json({
+          error:
+            "Les noms des équipes sont manquants dans la colonne Match.",
+        });
     }
 
-    // Première ligne “normalisée” pour la date/journée
+    // Date/journée
     const firstRow = normaliserRow(rows[0], equipe_locale, equipe_visiteuse);
     let parsedDate = parseCsvDate(firstRow.date_match);
-    parsedDate = clampDateReasonable(parsedDate) || toUTCDateAtMidnight(new Date());
+    parsedDate =
+      clampDateReasonable(parsedDate) || toUTCDateAtMidnight(new Date());
     const date_match_iso = parsedDate.toISOString();
 
-    // Trouver / Créer le match
+    // Trouver / créer le match
     let match_id = null;
     let created = false;
     let updated = false;
 
-    // par nom
     {
       const { data: byName } = await supabase
         .from("matchs")
@@ -298,13 +347,17 @@ export default async function handler(req, res) {
       if (byName?.id) match_id = byName.id;
     }
 
-    //par date + équipes
     if (!match_id) {
-      const start = new Date(Date.UTC(
-        parsedDate.getUTCFullYear(),
-        parsedDate.getUTCMonth(),
-        parsedDate.getUTCDate(), 0, 0, 0
-      ));
+      const start = new Date(
+        Date.UTC(
+          parsedDate.getUTCFullYear(),
+          parsedDate.getUTCMonth(),
+          parsedDate.getUTCDate(),
+          0,
+          0,
+          0
+        )
+      );
       const end = new Date(start.getTime() + 24 * 3600 * 1000);
 
       const { data: byDay } = await supabase
@@ -334,7 +387,9 @@ export default async function handler(req, res) {
 
       if (insertError || !newMatch) {
         console.error("Erreur d'insertion match :", insertError);
-        return res.status(500).json({ error: "Erreur lors de l'insertion du match." });
+        return res
+          .status(500)
+          .json({ error: "Erreur lors de l'insertion du match." });
       }
       match_id = newMatch.id;
       created = true;
@@ -352,13 +407,39 @@ export default async function handler(req, res) {
       if (updErr) console.warn("Mise à jour match échouée:", updErr?.message);
       else updated = true;
 
+      // [NOUVEAU] Nettoyage des anciens liens (au cas où la FK n'est pas en CASCADE)
+      {
+        const { data: oldEvtIds, error: oldEvtErr } = await supabase
+          .from("evenements")
+          .select("id")
+          .eq("id_match", match_id);
+
+        if (!oldEvtErr && (oldEvtIds?.length || 0) > 0) {
+          const idList = oldEvtIds.map((e) => e.id);
+          const { error: delLinksErr } = await supabase
+            .from("joueuses_evenements")
+            .delete()
+            .in("id_evenement", idList);
+
+          if (delLinksErr) {
+            console.warn(
+              "Suppression anciens liens joueuses_evenements échouée:",
+              delLinksErr?.message
+            );
+          }
+        }
+      }
+
       // Remplacement complet : on supprime les événements existants du match
       const { error: delEvtErr } = await supabase
         .from("evenements")
         .delete()
         .eq("id_match", match_id);
       if (delEvtErr) {
-        console.warn("Suppression anciens événements échouée:", delEvtErr?.message);
+        console.warn(
+          "Suppression anciens événements échouée:",
+          delEvtErr?.message
+        );
       }
     }
 
@@ -374,7 +455,9 @@ export default async function handler(req, res) {
       .eq("id", match_id);
 
     // Préparer les événements à insérer
-    const normalized = rows.map((r) => normaliserRow(r, equipe_locale, equipe_visiteuse));
+    const normalized = rows.map((r) =>
+      normaliserRow(r, equipe_locale, equipe_visiteuse)
+    );
     const eventsPayload = normalized.map((row) => {
       const temps_de_jeu = convertirTemps(row.temps_de_jeu);
       const duree = convertirTemps(row.duree);
@@ -406,7 +489,6 @@ export default async function handler(req, res) {
       };
     });
 
-    // 1) Insérer les événements en batch (retourne les IDs)
     const allInsertedEvents = [];
     for (const b of chunk(eventsPayload, 400)) {
       const { data, error } = await insertWithRetry(
@@ -415,15 +497,19 @@ export default async function handler(req, res) {
       );
       if (error) {
         console.error("Insertion événements (batch) échouée:", error?.message);
-        return res.status(500).json({ error: "Insertion d'événements échouée", details: error?.message });
+        return res.status(500).json({
+          error: "Insertion d'événements échouée",
+          details: error?.message,
+        });
       }
       allInsertedEvents.push(...(data || []));
     }
     if (allInsertedEvents.length !== eventsPayload.length) {
-      console.warn("Nombre d'événements insérés différent du payload – mapping par index.");
+      console.warn(
+        "Nombre d'événements insérés différent du payload – mapping par index."
+      );
     }
 
-    //Construire la liste de toutes les joueuses citées & créer une map nom->id
     const equipeByName = new Map();
     const posteByName = new Map();
     const allNames = [];
@@ -449,57 +535,90 @@ export default async function handler(req, res) {
         equipeByName.set(row.gb_adv, equipe_visiteuse);
         posteByName.set(row.gb_adv, "GB");
       }
-      if (row.joueur_minus_cthb)       { allNames.push(row.joueur_minus_cthb);       equipeByName.set(row.joueur_minus_cthb, equipe_locale); }
-      if (row.joueur_minus_cthb_prime) { allNames.push(row.joueur_minus_cthb_prime); equipeByName.set(row.joueur_minus_cthb_prime, equipe_locale); }
-      if (row.joueur_plus_cthb)        { allNames.push(row.joueur_plus_cthb);        equipeByName.set(row.joueur_plus_cthb, equipe_locale); }
-      if (row.joueur_plus_adv_prime)   { allNames.push(row.joueur_plus_adv_prime);   equipeByName.set(row.joueur_plus_adv_prime, equipe_visiteuse); }
+      if (row.joueur_minus_cthb) {
+        allNames.push(row.joueur_minus_cthb);
+        equipeByName.set(row.joueur_minus_cthb, equipe_locale);
+      }
+      if (row.joueur_minus_cthb_prime) {
+        allNames.push(row.joueur_minus_cthb_prime);
+        equipeByName.set(row.joueur_minus_cthb_prime, equipe_locale);
+      }
+      if (row.joueur_plus_cthb) {
+        allNames.push(row.joueur_plus_cthb);
+        equipeByName.set(row.joueur_plus_cthb, equipe_locale);
+      }
+      if (row.joueur_plus_adv_prime) {
+        allNames.push(row.joueur_plus_adv_prime);
+        equipeByName.set(row.joueur_plus_adv_prime, equipe_visiteuse);
+      }
     });
 
-    const playersMap = await buildPlayersMap(allNames, equipeByName, posteByName);
+    const playersMap = await buildPlayersMap(
+      allNames,
+      equipeByName,
+      posteByName
+    );
 
-    // Construire les liens joueuses_evenements (puis insérer en batch)
-    const links = [];
-    // on mappe chaque ligne à l’ID retourné à la même position (les insert PostgREST gardent l’ordre)
+    const linkByKey = new Map();
+
+    const pushLink = (evtId, nom, flags = {}) => {
+      if (!nom) return;
+      const id_joueuse = playersMap.get(nom);
+      if (!id_joueuse) return;
+
+      const key = `${evtId}|${id_joueuse}`;
+      const prev =
+        linkByKey.get(key) || {
+          id_evenement: evtId,
+          id_joueuse,
+          nom_joueuse: nom,
+          joueur_minus_cthb: null,
+          joueur_minus_cthb_prime: null,
+          joueur_plus_cthb: null,
+          joueur_plus_adv_prime: null,
+        };
+
+      if (flags.minuscthb) prev.joueur_minus_cthb = nom;
+      if (flags.minuscthbPrime) prev.joueur_minus_cthb_prime = nom;
+      if (flags.pluscthb) prev.joueur_plus_cthb = nom;
+      if (flags.plusadvPrime) prev.joueur_plus_adv_prime = nom;
+
+      linkByKey.set(key, prev);
+    };
+
     for (let i = 0; i < normalized.length; i++) {
       const row = normalized[i];
       const evtId = allInsertedEvents[i]?.id;
       if (!evtId) continue;
 
-      const addLink = (nom, flags = {}) => {
-        const id_joueuse = playersMap.get(nom);
-        if (!id_joueuse) return;
-        const link = {
-          id_evenement: evtId,
-          id_joueuse,
-          nom_joueuse: nom,
-          // Les colonnes TEXT de flags : on “remplit” avec le nom si le flag est actif
-          joueur_minus_cthb:       flags.minuscthb ? nom : null,
-          joueur_minus_cthb_prime: flags.minuscthbPrime ? nom : null,
-          joueur_plus_cthb:        flags.pluscthb ? nom : null,
-          joueur_plus_adv_prime:   flags.plusadvPrime ? nom : null,
-        };
-        links.push(link);
-      };
+      if (row.nom_joueuse_cthb) pushLink(evtId, row.nom_joueuse_cthb);
+      if (row.nom_joueuse_adv) pushLink(evtId, row.nom_joueuse_adv);
+      if (row.gb_cthb) pushLink(evtId, row.gb_cthb);
+      if (row.gb_adv) pushLink(evtId, row.gb_adv);
 
-      if (row.nom_joueuse_cthb) addLink(row.nom_joueuse_cthb);
-      if (row.nom_joueuse_adv)  addLink(row.nom_joueuse_adv);
-      if (row.gb_cthb)          addLink(row.gb_cthb);
-      if (row.gb_adv)           addLink(row.gb_adv);
-
-      if (row.joueur_minus_cthb)       addLink(row.joueur_minus_cthb,       { minuscthb: true });
-      if (row.joueur_minus_cthb_prime) addLink(row.joueur_minus_cthb_prime, { minuscthbPrime: true });
-      if (row.joueur_plus_cthb)        addLink(row.joueur_plus_cthb,        { pluscthb: true });
-      if (row.joueur_plus_adv_prime)   addLink(row.joueur_plus_adv_prime,   { plusadvPrime: true });
+      if (row.joueur_minus_cthb)
+        pushLink(evtId, row.joueur_minus_cthb, { minuscthb: true });
+      if (row.joueur_minus_cthb_prime)
+        pushLink(evtId, row.joueur_minus_cthb_prime, { minuscthbPrime: true });
+      if (row.joueur_plus_cthb)
+        pushLink(evtId, row.joueur_plus_cthb, { pluscthb: true });
+      if (row.joueur_plus_adv_prime)
+        pushLink(evtId, row.joueur_plus_adv_prime, { plusadvPrime: true });
     }
+
+    const links = Array.from(linkByKey.values());
 
     if (links.length) {
       for (const b of chunk(links, 800)) {
-        const { error } = await insertWithRetry(
-          // Si tu as une contrainte unique (id_evenement, id_joueuse), active upsert:
-          // () => supabase.from("joueuses_evenements").upsert(b, { onConflict: "id_evenement,id_joueuse" })
-          () => supabase.from("joueuses_evenements").insert(b)
+        const { error } = await insertWithRetry(() =>
+          supabase.from("joueuses_evenements").insert(b)
         );
-        if (error) console.warn("Insertion liens joueuses_evenements échouée:", error?.message);
+        if (error) {
+          console.warn(
+            "Insertion liens joueuses_evenements échouée:",
+            error?.message
+          );
+        }
       }
     }
 
@@ -515,6 +634,10 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error("Import – exception inattendue:", err);
-    return res.status(500).json({ ok: false, error: "Erreur serveur lors de l'import.", details: String(err?.message || err) });
+    return res.status(500).json({
+      ok: false,
+      error: "Erreur serveur lors de l'import.",
+      details: String(err?.message || err),
+    });
   }
 }
