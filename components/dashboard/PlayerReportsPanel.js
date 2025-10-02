@@ -140,7 +140,6 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
     );
     const playerEvents = (events || []).filter((e) => evtIdSet.has(e.id));
 
-    // --- OFFENSIF (inchangé) ---
     const playerName = norm(joueur.nom);
     let passesDecTot = 0;
     let passesDecAP = 0;
@@ -239,14 +238,16 @@ export default function PlayerReportsPanel({ events, jeLinks, match, joueur }) {
         if (isSeven) goals7m += 1;
       }
 
-      if (is7mObtenu) sevenObtenus += 1;
-      if (z.includes("2")) min_prov += 1;
-      if (z.startsWith("cr")) cr += 1;
+      if((isAP || isGE || isSeven) && !flagsByEvt[e.id]?.plus && !flagsByEvt[e.id]?.minus) {
+        if (is7mObtenu)  sevenObtenus += 1;
+        if (z.includes("2")) min_prov += 1;
+        if (z.startsWith("cr")) cr += 1;
+        if (isPerte) pertes += 1;
+        if (estTirNeg) tirHC += 1;
+      }
       if (flagsByEvt[e.id]?.plus) plus += 1;
-
-      if (isPerte) pertes += 1;
-      if (estTirNeg) tirHC += 1;
       if (flagsByEvt[e.id]?.minus) minus += 1;
+      
 
       if (isAP) {
         if (isGoal) ap_buts += 1;

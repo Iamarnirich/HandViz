@@ -19,22 +19,19 @@ import ImpactGridGK from "@/components/dashboard/ImpactGridGK";
 import TerrainHandballGK from "@/components/dashboard/TerrainHandballGK";
 import ImpactTablesGK from "@/components/dashboard/ImpactTablesGK";
 
-/* ====== Noms des vues (adapter si besoin) ====== */
 const VIEW_INDIVIDUEL = "v_joueur_match_events";
 const VIEW_GARDIEN = "v_gardien_match_events";
 
-/* ------ helpers ------ */
 const toIdKey = (v) => (v == null ? "" : String(v));
 const norm = (s) => (s || "").toLowerCase().trim();
 
-// ===== Pagination robuste Supabase =====
 async function fetchAllRows({
   table,
   select = "*",
-  orderBy = "id",      // colonne d’ordre STABLE (indexée si possible)
+  orderBy = "id",
   asc = true,
   pageSize = 5000,     // ajuste si besoin
-  mutateQuery,         // (q) => q.filter(...).eq(...).gte(...), etc.
+  mutateQuery,         // (q) => q.filter(...).eq(...).gte(...)
 }) {
   let from = 0;
   const all = [];
@@ -70,8 +67,6 @@ function driveToDirect(url) {
     return url;
   }
 }
-
-// Image “safe”
 function SafeImage({ src, alt, ...props }) {
   const ok =
     src &&
@@ -120,17 +115,17 @@ function DashboardLayout() {
           joueusesData,
           jeData,
         ] = await Promise.all([
-          // On ordonne par id pour paginer sans trous, et on triera par date pour l’affichage si besoin
+          
           fetchAllRows({
             table: "matchs",
             select: "id, nom_match, equipe_locale, equipe_visiteuse, club_locale_id, club_visiteuse_id, date_match, journee",
-            orderBy: "id", // IMPORTANT: clé stable
+            orderBy: "id", 
           }),
 
           fetchAllRows({
             table: "evenements",
             select: "*",
-            orderBy: "id", // IMPORTANT
+            orderBy: "id", 
           }),
 
           fetchAllRows({
@@ -152,11 +147,9 @@ function DashboardLayout() {
           }),
         ]);
 
-        // Si tu veux l’affichage des matchs du plus récent au plus ancien :
         matchsData.sort((a, b) => String(b.date_match || "").localeCompare(String(a.date_match || "")));
 
 
-        // Vues (en silence si absentes)
         let viewIndiv = [];
         let viewGK = [];
 
@@ -164,7 +157,7 @@ function DashboardLayout() {
           viewIndiv = await fetchAllRows({
             table: VIEW_INDIVIDUEL,
             select: "*",
-            orderBy: "id_evenement",  // ou la colonne stable présente dans ta vue
+            orderBy: "id_evenement", 
             asc: true,
             pageSize: 5000,
           });
@@ -174,7 +167,7 @@ function DashboardLayout() {
           viewGK = await fetchAllRows({
             table: VIEW_GARDIEN,
             select: "*",
-            orderBy: "id_evenement",  // idem
+            orderBy: "id_evenement", 
             asc: true,
             pageSize: 5000,
           });
@@ -220,10 +213,9 @@ function DashboardLayout() {
     return () => {
       supabase.removeChannel(sub);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setEquipeLocale, setEquipeAdverse, setNomMatch, setIdMatch, setIsTousLesMatchs]);
 
-  // Options d’équipes (stables)
+  
   const teamOptions = useMemo(() => {
     const set = new Set(
       Object.values(clubs)
@@ -436,7 +428,6 @@ function DashboardLayout() {
 
   const isUSDKSelected = norm(selectedTeam) === "usdk";
 
-  /* ===== Données pour INDIVIDUEL ===== */
   const eventsFromViewIndiv = useMemo(() => {
     if (!selectedJoueuse) return [];
     const rows = (viewIndivRows || []).filter((r) => {
@@ -463,7 +454,6 @@ function DashboardLayout() {
     ? eventsFromViewIndiv
     : filteredEvents;
 
-  /* ===== Données pour GARDIEN ===== */
   const eventsFromViewGK = useMemo(() => {
     if (!selectedGardien) return [];
     const rows = (viewGardienRows || []).filter((r) => {
@@ -547,7 +537,6 @@ function DashboardLayout() {
           </div>
         </div>
 
-        {/* En-tête match */}
         {matchId != null && clubLocal && clubVisiteur && (
           <div className="mt-2 w-fit mx-auto flex flex-col items-center gap-1">
             <p className="text-sm font-semibold text-gray-600">
@@ -576,7 +565,6 @@ function DashboardLayout() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="flex justify-center gap-2 sm:gap-3 flex-wrap">
           {[
             { key: "offensif", label: "Rapport offensif" },
@@ -611,7 +599,6 @@ function DashboardLayout() {
           </button>
         </div>
 
-        {/* DASHBOARD */}
         {!shouldHideDashboard && !showHistorique && (
           <>
             {/* OFFENSIF */}
@@ -801,7 +788,6 @@ function DashboardLayout() {
                       />
                     </div>
 
-                    {/* Contenu central */}
                     <div className="order-1 lg:order-2 lg:col-span-8 flex flex-col items-center gap-8 w-full">
                       <div className="w-full">
                         <UtilisationSecteursChart
@@ -834,7 +820,6 @@ function DashboardLayout() {
                       </div>
                     </div>
 
-                    {/* Gauges droite */}
                     <div className="order-3 lg:col-span-2 flex flex-col gap-6">
                       <GaugesPanel
                         data={filteredEvents}
@@ -924,25 +909,20 @@ function DashboardLayout() {
                       className="rounded-full shadow border object-cover"
                     />
 
-                    {/* Layout GK */}
                     <div className="w-full max-w-[1400px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-stretch">
-                      {/* Col gauche : tables */}
                       <div className="md:col-span-6 w-full h-full mt-[12px] md:mt-[20px]">
                         <ImpactTablesGK data={dataForGKChart} gardien={selectedGardien} />
                       </div>
 
-                      {/* Col droite : grille + terrain */}
                       <div className="md:col-span-6 w-full h-full flex flex-col gap-6 mt-[12px] md:mt-[20px]">
                         <div className="w-full">
                           <ImpactGridGK data={dataForGKChart} gardien={selectedGardien} />
                         </div>
                         <div className="w-full">
-                          {/* Laisse le composant gérer sa hauteur interne */}
                           <TerrainHandballGK data={dataForGKChart} gardien={selectedGardien} />
                         </div>
                       </div>
 
-                      {/* Bas : camembert full width */}
                       <div className="md:col-span-12 w-full">
                         <CamembertChart data={dataForGKChart} />
                       </div>
