@@ -99,7 +99,6 @@ function getCardClassesByObjective(status) {
   return "bg-white text-[#1a1a1a]";
 }
 
-/* ===== helpers robustes pour les 2' (ajoutés) ===== */
 const hasTwo = (s) => /\b2\s*['’]?\s*(?:min|\b)/.test((s || "").toLowerCase());
 
 function whichSideAttacks(action, possession, team) {
@@ -115,7 +114,6 @@ function whichSideAttacks(action, possession, team) {
   if (m2 && team) return m2[2].trim() === team ? "us" : "opp";
   return null;
 }
-/* ================================================ */
 
 export default function StatGlobalOverview({
   data,
@@ -182,31 +180,70 @@ export default function StatGlobalOverview({
       return norm(e?.[defenseField] || "");
     };
 
+    // ====== MODIF 1 : recenser correctement les matchs de l'équipe ======
     const possRows = data.filter((r) => !!parsePossession(r.possession));
-    const matchIdsWithTeam = new Set(
+
+    const teamMatchIds = new Set();
+    if (team) {
+      const T = team;
+      data.forEach((row) => {
+        const idm = row?.id_match;
+        if (!idm) return;
+
+        const poss = (row?.possession || "").toLowerCase();
+        const a = (row?.nom_action || "").toLowerCase();
+        const rc = (row?.resultat_cthb || "").toLowerCase();
+        const rl = (row?.resultat_limoges || "").toLowerCase();
+
+        const m = poss.match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+        if (m && (m[1].trim() === T || m[2].trim() === T)) { teamMatchIds.add(idm); return; }
+        if (
+          a.startsWith("attaque " + T) || a.startsWith("ca " + T) ||
+          a.startsWith("er " + T) || a.startsWith("mb " + T) ||
+          a.startsWith("transition " + T)
+        ) { teamMatchIds.add(idm); return; }
+        if (rc.includes(T) || rl.includes(T)) { teamMatchIds.add(idm); return; }
+      });
+    }
+
+    const matchIdsWithTeamFromPoss = new Set(
       possRows
         .filter((r) => {
           const p = parsePossession(r.possession);
-          if (!p || !team) return false;
-          return p.equipe === team || p.adv === team;
+          return p && team && (p.equipe === team || p.adv === team);
         })
         .map((r) => r.id_match)
         .filter(Boolean)
     );
-    const gamesTeam = Math.max(1, matchIdsWithTeam.size);
 
+    const gamesTeam = Math.max(1, teamMatchIds.size || matchIdsWithTeamFromPoss.size);
+    const matchIdsWithTeam = teamMatchIds.size ? teamMatchIds : matchIdsWithTeamFromPoss;
+    // ====== FIN MODIF 1 ======
+
+    // ====== MODIF 2 : ne pas re-diviser les indices (ratios) ======
     const divideStats = (obj) => {
       if (!isTousLesMatchs || gamesTeam < 2) return obj;
-      const out = {};
-      for (const k in obj) {
-        if (k === "possessions") { out[k] = obj[k]; continue; }
-        const v = obj[k];
-        if (typeof v === "number") out[k] = Number((v / gamesTeam).toFixed(1));
-        else if (v && typeof v === "object") out[k] = divideStats(v);
-        else out[k] = v;
-      }
-      return out;
+
+      const SKIP_KEYS = new Set(["indiceContinuite", "indiceAgressivite", "possessions"]);
+
+      const rec = (node, keyName) => {
+        if (!node || typeof node !== "object") return node;
+
+        if (SKIP_KEYS.has(keyName)) return node;
+
+        const out = Array.isArray(node) ? [] : {};
+        for (const k in node) {
+          const v = node[k];
+          if (typeof v === "number") out[k] = Number((v / gamesTeam).toFixed(1));
+          else if (v && typeof v === "object") out[k] = rec(v, k);
+          else out[k] = v;
+        }
+        return out;
+      };
+
+      return rec(obj, "");
     };
+    // ====== FIN MODIF 2 ======
 
     /* ===================== DÉFENSIF ===================== */
     if (rapport === "defensif") {
@@ -224,6 +261,14 @@ export default function StatGlobalOverview({
       };
 
       let butsAP = 0, neutralAP = 0;
+
+      // ===== per-match buckets pour l’indice d’agressivité
+      const defMatchAgg = new Map();
+      const aggDef = (id) => {
+        if (!id) return null;
+        if (!defMatchAgg.has(id)) defMatchAgg.set(id, { butsAP: 0, neutralAP: 0 });
+        return defMatchAgg.get(id);
+      };
 
       const totalPossInTeamMatches = possRows.filter((r) => matchIdsWithTeam.has(r.id_match)).length;
       const offPossCount = possRows.filter((r) => {
@@ -259,12 +304,9 @@ export default function StatGlobalOverview({
         const resultat = pickDefResult(e);
         const sanction = norm(e.sanctions);
 
-        // Détermine l'adversaire de la ligne
         const p = parsePossession(e.possession);
         let opp = "";
-        if (p && team) {
-          opp = p.equipe === team ? p.adv : p.equipe;
-        }
+        if (p && team) { opp = p.equipe === team ? p.adv : p.equipe; }
 
         const citesOpp = opp && (action.includes(opp) || resultat.includes(opp));
         const isAdv = citesOpp || (!!resultat && !resultat.includes("encaissé"));
@@ -288,13 +330,14 @@ export default function StatGlobalOverview({
           if (phaseKeys.jt && result[key].jt !== undefined) result[key].jt++;
         };
 
-        // --- BUTS ENCAISSÉS (par l’adversaire)
         if (opp ? resultat.startsWith("but " + opp) : resultat.startsWith("but ")) {
           inc("butsEncaisses");
-          if (isAP) butsAP++;
+          if (isAP) {
+            butsAP++;
+            const b = aggDef(e?.id_match); if (b) b.butsAP++;
+          }
         }
 
-        // --- TIRS HC / ARRÊTÉS / CONTRÉS (de l’adversaire)
         const hasHC = opp ? resultat.includes("tir hc " + opp) : resultat.includes("tir hc ");
         const hasArret =
           (opp ? resultat.includes("tir arrêté " + opp) : resultat.includes("tir arrêté ")) ||
@@ -306,41 +349,42 @@ export default function StatGlobalOverview({
         if (hasHC) inc("tirsHorsCadreAdv");
         if (hasArret) inc("arrets");
 
-        if (
-          (opp ? resultat.startsWith("but " + opp) : resultat.startsWith("but ")) ||
-          hasContre || hasHC || hasArret
-        ) {
+        if ((opp ? resultat.startsWith("but " + opp) : resultat.startsWith("but ")) || hasContre || hasHC || hasArret) {
           inc("tirsTotaux");
         }
 
-        // --- BALLES RÉCUPÉRÉES (pertes de balle adverses)
         if (opp ? resultat.includes("perte de balle " + opp) : resultat.includes("perte de balle ")) {
           inc("ballesRecuperees");
         }
 
-        // --- NEUTRALISATIONS RÉALISÉES
         if (resultat.includes("neutralisée")) {
           result.neutralisationsReal.total++;
-          if (isAP) neutralAP++;
+          if (isAP) {
+            neutralAP++;
+            const b = aggDef(e?.id_match); if (b) b.neutralAP++;
+          }
         }
 
-        // --- 2' SUBIES (robuste)  ****** PATCH ICI ******
         const san = (e.sanctions || "").toLowerCase();
         const bothRes = `${(e.resultat_cthb||"").toLowerCase()} | ${(e.resultat_limoges||"").toLowerCase()}`;
-        const attacker = whichSideAttacks(e.nom_action, e.possession, team); // "opp" | "us" | null
+        const attacker = whichSideAttacks(e.nom_action, e.possession, team);
         const seenTwo = hasTwo(san) || hasTwo(bothRes);
-       
 
-        // on compte si l'adversaire attaque ET qu'on voit une 2'
-        // on ignore si explicitement "obtenu(e)"; on accepte si explicitement "subi(e)"
-        if (attacker === "opp" && seenTwo) {
-          result.deuxMinSubies.total++;
-        }
-        // --- 7m SUBIS
+        if (attacker === "opp" && seenTwo) { result.deuxMinSubies.total++; }
         if (opp ? resultat.startsWith("7m " + opp) : resultat.startsWith("7m ")) result.septMSubis.total++;
       });
 
-      result.indiceAgressivite.total = butsAP > 0 ? Number((neutralAP / butsAP).toFixed(2)) : "—";
+      // ===== moyenne des ratios par match pour l’indice d’agressivité
+      if (isTousLesMatchs && defMatchAgg.size > 0) {
+        let sum = 0, n = 0;
+        defMatchAgg.forEach(({ butsAP, neutralAP }) => {
+          if (butsAP > 0) { sum += neutralAP / butsAP; n++; }
+        });
+        result.indiceAgressivite.total = n > 0 ? Number((sum / n).toFixed(2)) : "—";
+      } else {
+        result.indiceAgressivite.total = butsAP > 0 ? Number((neutralAP / butsAP).toFixed(2)) : "—";
+      }
+
       return isTousLesMatchs ? divideStats(result) : result;
     }
 
@@ -358,6 +402,14 @@ export default function StatGlobalOverview({
     };
 
     let butsAP = 0, neutralAP = 0;
+
+    // ===== per-match buckets pour l’indice de continuité
+    const offMatchAgg = new Map();
+    const aggOff = (id) => {
+      if (!id) return null;
+      if (!offMatchAgg.has(id)) offMatchAgg.set(id, { butsAP: 0, neutralAP: 0 });
+      return offMatchAgg.get(id);
+    };
 
     const offPossRows = possRows.filter((r) => {
       const p = parsePossession(r.possession);
@@ -413,7 +465,13 @@ export default function StatGlobalOverview({
           resultat.startsWith("tir hc " + team)
         ) inc("tirsRates");
 
-        if (resultat.startsWith("but " + team) && !resultat.includes("encaissé")) { inc("buts"); if (isAP) butsAP++; }
+        if (resultat.startsWith("but " + team) && !resultat.includes("encaissé")) {
+          inc("buts");
+          if (isAP) {
+            butsAP++;
+            const b = aggOff(e?.id_match); if (b) b.butsAP++;
+          }
+        }
 
         if (resultat.startsWith("perte de balle " + team)) inc("pertesBalle");
 
@@ -426,14 +484,30 @@ export default function StatGlobalOverview({
           resultat.startsWith("tir arret " + team)
         ) inc("tirsTotal");
 
-        if (resultat.includes(team) && resultat.includes("neutralisée")) { resultOff.neutralisations.total++; if (isAP) neutralAP++; }
+        if (resultat.includes(team) && resultat.includes("neutralisée")) {
+          resultOff.neutralisations.total++;
+          if (isAP) {
+            neutralAP++;
+            const b = aggOff(e?.id_match); if (b) b.neutralAP++;
+          }
+        }
 
         if ((action.startsWith("attaque " + team)|| action.startsWith("ca " + team)||action.startsWith("er " + team)|| action.startsWith("mb " + team)|| action.startsWith("transition " + team)) && sanction.startsWith("2'")) resultOff.deuxMinutes.total++;
         if (resultat.startsWith("7m obtenu " + team)) resultOff.jets7m.total++;
       }
     });
 
-    resultOff.indiceContinuite.total = neutralAP > 0 ? Number((butsAP / neutralAP).toFixed(2)) : "—";
+    // ===== moyenne des ratios par match pour l’indice de continuité
+    if (isTousLesMatchs && offMatchAgg.size > 0) {
+      let sum = 0, n = 0;
+      offMatchAgg.forEach(({ butsAP, neutralAP }) => {
+        if (neutralAP > 0) { sum += butsAP / neutralAP; n++; }
+      });
+      resultOff.indiceContinuite.total = n > 0 ? Number((sum / n).toFixed(2)) : "—";
+    } else {
+      resultOff.indiceContinuite.total = neutralAP > 0 ? Number((butsAP / neutralAP).toFixed(2)) : "—";
+    }
+
     return isTousLesMatchs ? divideStats(resultOff) : resultOff;
   }, [data, rapport, equipeLocale, equipeAdverse, isTousLesMatchs, offenseField, defenseField, teamName]);
 

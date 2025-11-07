@@ -323,10 +323,10 @@ export default function GaugesPanel({
           }
         });
 
-        L["Efficacité déf. Globale"] = { num: butsRecus, den: possAdv, pct: possAdv > 0 ? (butsRecus / possAdv) * 100 : 0 };
-        L["Efficacité déf. Placée"] = { num: butsAP,    den: possAP,   pct: possAP > 0 ? (butsAP / possAP) * 100 : 0 };
-        L["Efficacité déf. GE"]     = { num: butsGE,    den: possGE,   pct: possGE > 0 ? (butsGE / possGE) * 100 : 0 };
-        L["Eff. en Inf. Numérique"] = { num: butsInf,   den: supPoss,  pct: supPoss > 0 ? (butsInf / supPoss) * 100 : 0 };
+        L["Efficacité déf. Globale"] = { num: (possAdv-butsRecus), den: possAdv, pct: possAdv > 0 ? ((possAdv-butsRecus) / possAdv) * 100 : 0 };
+        L["Efficacité déf. Placée"] = { num: (possAP-butsAP),    den: possAP,   pct: possAP > 0 ? ((possAP-butsAP) / possAP) * 100 : 0 };
+        L["Efficacité déf. GE"]     = { num: (possGE-butsGE),    den: possGE,   pct: possGE > 0 ? ( (possGE-butsGE)/ possGE) * 100 : 0 };
+        L["Eff. en Inf. Numérique"] = { num: (supPoss-butsInf),   den: supPoss,  pct: supPoss > 0 ? ((supPoss-butsInf)/ supPoss) * 100 : 0 };
         L["% Tirs en Duel reçus"]   = { num: tirsDuel,  den: tirsAP,   pct: tirsAP > 0 ? (tirsDuel / tirsAP) * 100 : 0 };
         L["% Réussite Duel Adv"]    = { num: butsDuel,  den: tirsDuel, pct: tirsDuel > 0 ? (butsDuel / tirsDuel) * 100 : 0 };
       } else {
@@ -385,7 +385,8 @@ export default function GaugesPanel({
             if (rTeam.startsWith(`but ${team}`)) butsH7++;
           }
           if (isAP || isGE || seven) {
-            if (effbut || (s.startsWith("2")) || s.startsWith("cr")) butsglobal++;
+            //if (effbut || (s.startsWith("2")) || s.startsWith("cr")) butsglobal++;
+            if (effbut) butsglobal++;
           }
           if (isAP) {
             if (effbut || ((s.startsWith("2")) || s.startsWith("cr"))) butsAP++;

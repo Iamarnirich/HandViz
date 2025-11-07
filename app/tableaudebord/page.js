@@ -18,6 +18,8 @@ import { MatchProvider, useMatch } from "@/contexts/MatchContext";
 import ImpactGridGK from "@/components/dashboard/ImpactGridGK";
 import TerrainHandballGK from "@/components/dashboard/TerrainHandballGK";
 import ImpactTablesGK from "@/components/dashboard/ImpactTablesGK";
+import ClassementEquipe from "@/components/dashboard/ClassementEquipe";
+
 
 const VIEW_INDIVIDUEL = "v_joueur_match_events";
 const VIEW_GARDIEN = "v_gardien_match_events";
@@ -569,6 +571,7 @@ function DashboardLayout() {
           {[
             { key: "offensif", label: "Rapport offensif" },
             { key: "defensif", label: "Rapport défensif" },
+            { key: "classement", label: "Classement" },
             { key: "individuel", label: "Rapport individuel" },
             { key: "gardien", label: "Rapport gardien" },
           ].map((r) => (
@@ -722,7 +725,7 @@ function DashboardLayout() {
                 </div>
               </>
             )}
-
+            
             {/* DEFENSIF */}
             {rapport === "defensif" && (
               <>
@@ -841,6 +844,17 @@ function DashboardLayout() {
                   </div>
                 </div>
               </>
+            )}
+            {/* ===== Classement ===== */}
+            {rapport === "classement" && (
+              <div className="w-full flex flex-col items-center justify-center">
+                <ClassementEquipe
+                  matchs={matchs}
+                  evenements={evenements}
+                  clubs={clubs}      // <— important pour afficher les logos
+                  topN={10}          // tu peux ajuster
+                />
+              </div>
             )}
 
             {/* ===== Rapport individuel ===== */}
