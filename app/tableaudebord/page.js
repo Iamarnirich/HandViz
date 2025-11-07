@@ -852,7 +852,7 @@ function DashboardLayout() {
                   matchs={matchs}
                   evenements={evenements}
                   clubs={clubs}      // <— important pour afficher les logos
-                  topN={10}          // tu peux ajuster
+                  topN={500}          // tu peux ajuster
                 />
               </div>
             )}

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 
+/** ——— Critères affichables ——— */
 const CRITERES = [
   "Possessions",
   "Buts Marqués",
@@ -20,22 +21,37 @@ const CRITERES = [
   "Efficacité déf. GE",
 ];
 
-const ASC_GOOD = {
-  "Pertes de balle": true,
-  "Buts encaissées": true,
-};
+const ASC_GOOD = { "Pertes de balle": true, "Buts encaissées": true };
 
 const toIdKey = (v) => (v == null ? "" : String(v));
-const lower = (s) => (s || "").toLowerCase();
-const starts = (s, p) => lower(s).startsWith(lower(p));
-const has = (s, p) => lower(s).includes(lower(p));
-
+const norm = (s) =>
+  (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+const starts = (s, p) => norm(s).startsWith(norm(p));
+const has = (s, p) => norm(s).includes(norm(p));
 const parsePossession = (txt) => {
-  const m = lower(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
+  const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
   return m ? { equipe: (m[1] || "").trim(), adv: (m[2] || "").trim() } : null;
 };
 
-// petit helper pour transformer un lien Drive (view / ?id=) -> lien direct
+const isSevenMEvent = (e) => {
+  const clean = (x) =>
+    (x || "")
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "");
+  const sect = clean(e?.secteur);
+  const act = clean(e?.nom_action);
+  const rc = clean(e?.resultat_cthb);
+  const rl = clean(e?.resultat_limoges);
+  const re = /(7m|7metres|7metre|jetde7m|jet7m)/;
+  return re.test(sect) || /att7m/.test(act) || re.test(rc) || re.test(rl);
+};
+
+const pickOffResSingle = (e, offenseField) => norm(offenseField ? e?.[offenseField] : e?.resultat_cthb);
+const pickDefResSingle = (e, defenseField) => norm(defenseField ? e?.[defenseField] : e?.resultat_limoges);
+
 const driveToDirect = (url) => {
   if (!url) return url;
   try {
@@ -45,14 +61,11 @@ const driveToDirect = (url) => {
     const m2 = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (m2 && m2[1]) return `https://drive.google.com/uc?id=${m2[1]}`;
     return s;
-  } catch {
-    return url;
-  }
+  } catch { return url; }
 };
 
 const SafeLogo = ({ src, alt, size = 22, className = "" }) => {
-  const ok =
-    src && typeof src === "string" && src.startsWith("http") && !src.includes("google.com/url");
+  const ok = src && typeof src === "string" && src.startsWith("http") && !src.includes("google.com/url");
   const finalSrc = ok ? driveToDirect(src) : "/placeholder.jpg";
   return (
     <img
@@ -66,31 +79,30 @@ const SafeLogo = ({ src, alt, size = 22, className = "" }) => {
   );
 };
 
-export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN = 10 }) {
+export default function ClassementEquipe({
+  matchs,
+  evenements,
+  clubs = {},
+  topN = 10,
+}) {
+  // états des 5 critères (visuel inchangé)
   const [crit1, setCrit1] = useState("Eff. Globale");
   const [crit2, setCrit2] = useState("Buts Marqués");
   const [crit3, setCrit3] = useState("Pertes de balle");
   const [crit4, setCrit4] = useState("Efficacité déf. Globale");
   const [crit5, setCrit5] = useState("Arrêts GB");
 
-  // index : matchId -> { home, away, lab, logos }
+  // index match -> infos + logos
   const matchIndex = useMemo(() => {
     const idx = {};
     (matchs || []).forEach((m) => {
       const id = toIdKey(m.id);
-      const home = m.equipe_locale || "";
-      const away = m.equipe_visiteuse || "";
-      const lab = m.nom_match || `${home} – ${away}`;
-
-      const homeLogo = clubs[m.club_locale_id]?.logo || null;
-      const awayLogo = clubs[m.club_visiteuse_id]?.logo || null;
-
       idx[id] = {
-        home,
-        away,
-        label: lab,
-        homeLogo,
-        awayLogo,
+        home: m.equipe_locale || "",
+        away: m.equipe_visiteuse || "",
+        label: m.nom_match || `${m.equipe_locale || ""} – ${m.equipe_visiteuse || ""}`,
+        homeLogo: clubs[m.club_locale_id]?.logo || null,
+        awayLogo: clubs[m.club_visiteuse_id]?.logo || null,
         journee: m.journee || "",
         date: m.date_match || "",
       };
@@ -98,28 +110,19 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
     return idx;
   }, [matchs, clubs]);
 
-  /**
-   * On calcule des ENTRIES "par match et par équipe".
-   * Chaque entrée = { team, matchId, matchLabel, logo, values{...} }.
-   * Les valeurs sont celles du match uniquement (pas de moyenne).
-   */
   const { rankBy } = useMemo(() => {
-    // accumulateur par match & par équipe
+    // 1) Agrégat par (match, équipe)
     const initAgg = () => ({
       possOff: 0, possAP: 0, possGE: 0,
       buts: 0, butsAP: 0, butsGE: 0,
       pertes: 0, tirsTotalOff: 0, neutraSubies: 0,
-
       butsConc: 0, arrets: 0, ballesRecup: 0, neutraReussies: 0,
-      tirsTotauxDef: 0,
-      defShotsAP: 0, defGoalsAP: 0,
-      defShotsGE: 0, defGoalsGE: 0,
+      possAdv: 0, possAPadv: 0, possGEadv: 0,
+      butsAPrecus: 0, butsGErecus: 0,
     });
 
-    // key = matchId|team
     const aggByMatchTeam = new Map();
     const keyOf = (idm, team) => `${idm}|${team}`;
-
     const getAgg = (idm, team) => {
       const k = keyOf(idm, team);
       if (!aggByMatchTeam.has(k)) aggByMatchTeam.set(k, initAgg());
@@ -133,123 +136,123 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
 
       const home = info.home || "";
       const away = info.away || "";
-
-      const a = lower(e.nom_action);
+      const a = norm(e.nom_action);
       const p = parsePossession(e.possession);
-      const rc = lower(e.resultat_cthb);
-      const rl = lower(e.resultat_limoges);
 
-      const isAP = a.startsWith("attaque ");
-      const isCA = a.startsWith("ca ");
-      const isER = a.startsWith("er ");
-      const isMB = a.startsWith("mb ");
-      const isJT = a.startsWith("transition ");
-      const isGEPhase = isCA || isER || isMB || isJT;
+      const offHome = pickOffResSingle(e, "resultat_cthb");
+      const defAway = pickDefResSingle(e, "resultat_limoges");
+      const offAway = pickOffResSingle(e, "resultat_limoges");
+      const defHome = pickDefResSingle(e, "resultat_cthb");
 
-      // pour une équipe donnée, compter son OFF et la DEF de l'adversaire
-      const forTeam = (team, offRes, defRes) => {
-        const agg = getAgg(idm, team);
+      const handleForTeam = (team, offRes, defRes) => {
+        const A = getAgg(idm, team);
 
-        // Offense
-        if (p && p.equipe === team) {
-          agg.possOff++;
-          if (isAP) agg.possAP++;
-          if (isGEPhase) agg.possGE++;
+        const seven = isSevenMEvent(e);
+        const isAP = a.startsWith(`attaque ${norm(team)}`);
+        const isGE =
+          a.startsWith(`ca ${norm(team)}`) ||
+          a.startsWith(`er ${norm(team)}`) ||
+          a.startsWith(`mb ${norm(team)}`) ||
+          a.startsWith(`transition ${norm(team)}`);
+
+        // OFF
+        if (p && norm(p.equipe) === norm(team)) {
+          A.possOff++; 
+          if (isAP) A.possAP++; 
+          if (isGE) A.possGE++;
         }
+        const isButTeam = starts(offRes, `but ${team}`);
+        const isShotAny = starts(offRes, "tir ") || isButTeam || starts(offRes, `7m obtenu ${team}`);
+        if (isShotAny && !seven) A.tirsTotalOff++;
+        if (isButTeam || starts(offRes, `7m obtenu ${team}`)) {
+          A.buts++; if (isAP) A.butsAP++; if (isGE) A.butsGE++;
+        }
+        if (starts(offRes, `perte de balle ${team}`)) A.pertes++;
+        if (has(offRes, "neutralisee") || has(offRes, "neutralisée")) A.neutraSubies++;
 
-        // Defense : actions de tir de l'adversaire (pour % def)
-        if (p && p.equipe !== team && (p.equipe === home || p.equipe === away)) {
-          const oppIsAP = isAP;
-          const oppIsGE = isGEPhase;
-          const isButOpp = starts(defRes, "but ");
-          const isHCopp = has(defRes, "tir hc ");
-          const isArretOpp = has(defRes, "tir arrêté ") || has(defRes, "tir arret ");
-          const isContreOpp = has(defRes, "tir contré ") || has(defRes, "tir contre ");
+        // DEF — possessions adverses
+        if (p && norm(p.equipe) !== norm(team) && (norm(p.equipe) === norm(home) || norm(p.equipe) === norm(away))) {
+          A.possAdv++;
+          const oppIsAP = a.startsWith("attaque ");
+          const oppIsGE =
+            a.startsWith("ca ") || a.startsWith("er ") || a.startsWith("mb ") || a.startsWith("transition ");
+          if (oppIsAP) A.possAPadv++;
+          if (oppIsGE) A.possGEadv++;
 
-          if (isButOpp || isHCopp || isArretOpp || isContreOpp) {
-            agg.tirsTotauxDef++;
-            if (oppIsAP) {
-              agg.defShotsAP++;
-              if (isButOpp) agg.defGoalsAP++;
-            } else if (oppIsGE) {
-              agg.defShotsGE++;
-              if (isButOpp) agg.defGoalsGE++;
-            }
+          const isButOpp = starts(defRes, "but ") || starts(defRes, "7m obtenu");
+          if (isButOpp) {
+            A.butsConc++;
+            if (oppIsAP) A.butsAPrecus++;
+            if (oppIsGE) A.butsGErecus++;
           }
+          if (has(defRes, "tir arrete ") || has(defRes, "tir arrete") || has(defRes, "tir arrêté ") || has(defRes, "tir arret "))
+            A.arrets++;
+          if (has(defRes, "perte de balle ")) A.ballesRecup++;
+          if (has(defRes, "neutralisee") || has(defRes, "neutralisée")) A.neutraReussies++;
         }
-
-        // Offense: tirs/buts/pertes/neutralisations subies
-        const isButTeam = starts(offRes, "but ");
-        const isHCteam = has(offRes, "tir hc ");
-        const isArretTeam = has(offRes, "tir arrêté ") || has(offRes, "tir arret ");
-        const isContreTeam = has(offRes, "tir contré ") || has(offRes, "tir contre ");
-
-        if (isButTeam || isHCteam || isArretTeam || isContreTeam) {
-          agg.tirsTotalOff++;
-          if (isButTeam) {
-            agg.buts++;
-            if (isAP) agg.butsAP++;
-            if (isGEPhase) agg.butsGE++;
-          }
-        }
-        if (starts(offRes, "perte de balle ")) agg.pertes++;
-        if (has(offRes, "neutralisée")) agg.neutraSubies++;
-
-        // Defense: buts encaissés / arrêts / balles récup / neutralisations réussies
-        if (starts(defRes, "but ")) agg.butsConc++;
-        if (has(defRes, "tir arrêté ") || has(defRes, "tir arret ")) agg.arrets++;
-        if (has(defRes, "perte de balle ")) agg.ballesRecup++;
-        if (has(defRes, "neutralisée")) agg.neutraReussies++;
       };
 
-      // home attaque via resultat_cthb ; away via resultat_limoges
-      if (home) forTeam(home, rc, rl);
-      if (away) forTeam(away, rl, rc);
+      if (home) handleForTeam(home, offHome, defAway);
+      if (away) handleForTeam(away, offAway, defHome);
     });
 
-    // Transforme en lignes "par match"
-    const rowsPerMatch = [];
+    // 2) Re-agrégation par équipe → totaux + nbMatchs
+    const teamTotals = new Map(); // team -> { sumAgg, n, logo }
+    const pushTeam = (team, logo, A) => {
+      if (!teamTotals.has(team)) {
+        teamTotals.set(team, {
+          sums: { ...A }, n: 1, logo,
+        });
+      } else {
+        const t = teamTotals.get(team);
+        Object.keys(A).forEach((k) => { t.sums[k] += A[k]; });
+        t.n += 1;
+        t.logo = t.logo || logo; // garde un logo si dispo
+      }
+    };
+
     aggByMatchTeam.forEach((A, k) => {
       const [idm, team] = k.split("|");
       const info = matchIndex[idm] || {};
-      const isHome = team === info.home;
+      const isHome = norm(team) === norm(info.home);
       const logo = isHome ? info.homeLogo : info.awayLogo;
+      pushTeam(team, logo, A);
+    });
 
-      // valeurs par match (pas de moyenne ici)
-      const Possessions = A.possOff;
-      const ButsMarques = A.buts;
-      const Pertes = A.pertes;
-      const TirsTotal = A.tirsTotalOff;
-      const NeutraSubies = A.neutraSubies;
+    // 3) Lignes finales par équipe = moyennes par match + ratios sur totaux
+    const rowsByTeam = [];
+    teamTotals.forEach((obj, team) => {
+      const { sums: S, n } = obj;
 
-      const ButsConc = A.butsConc;
-      const Arrets = A.arrets;
-      const BallesRecup = A.ballesRecup;
-      const NeutraReussies = A.neutraReussies;
+      const avg = (x) => +(x / Math.max(1, n)).toFixed(1);
 
-      const EffGlobale = A.possOff > 0 ? +(A.buts / A.possOff).toFixed(3) : 0;
-      const EffAP = A.possAP > 0 ? +(A.butsAP / A.possAP).toFixed(3) : 0;
-      const EffGE = A.possGE > 0 ? +(A.butsGE / A.possGE).toFixed(3) : 0;
+      // comptages → moyenne par match
+      const Possessions = avg(S.possOff);
+      const ButsMarques = avg(S.buts);
+      const Pertes = avg(S.pertes);
+      const TirsTotal = avg(S.tirsTotalOff);
+      const NeutraSubies = avg(S.neutraSubies);
 
-      const EffDefGlobale =
-        A.tirsTotauxDef > 0
-          ? +((A.tirsTotauxDef - A.butsConc) / A.tirsTotauxDef).toFixed(3)
-          : 0;
-      const EffDefPlacee =
-        A.defShotsAP > 0
-          ? +((A.defShotsAP - A.defGoalsAP) / A.defShotsAP).toFixed(3)
-          : 0;
-      const EffDefGE =
-        A.defShotsGE > 0
-          ? +((A.defShotsGE - A.defGoalsGE) / A.defShotsGE).toFixed(3)
-          : 0;
+      const ButsConc = avg(S.butsConc);
+      const Arrets = avg(S.arrets);
+      const BallesRecup = avg(S.ballesRecup);
+      const NeutraReussies = avg(S.neutraReussies);
 
-      rowsPerMatch.push({
+      // ratios → sur les totaux cumulés
+      const EffGlobale = S.possOff > 0 ? +(S.buts / S.possOff).toFixed(3) : 0;
+      const EffAP = S.possAP > 0 ? +(S.butsAP / S.possAP).toFixed(3) : 0;
+      const EffGE = S.possGE > 0 ? +(S.butsGE / S.possGE).toFixed(3) : 0;
+
+      const EffDefGlobale = S.possAdv > 0 ? +(((S.possAdv - S.butsConc) / S.possAdv)).toFixed(3) : 0;
+      const EffDefPlacee = S.possAPadv > 0 ? +(((S.possAPadv - S.butsAPrecus) / S.possAPadv)).toFixed(3) : 0;
+      const EffDefGE = S.possGEadv > 0 ? +(((S.possGEadv - S.butsGErecus) / S.possGEadv)).toFixed(3) : 0;
+
+      rowsByTeam.push({
         team,
-        logo,
-        matchId: idm,
-        matchLabel: info.label || "",
-        meta: { journee: info.journee, date: info.date },
+        logo: obj.logo || null,
+        matchId: `avg-${team}`, // conservé pour la key du li
+        matchLabel: `Moyenne • ${n} match${n > 1 ? "s" : ""}`,
+        meta: { journee: "", date: "" },
         values: {
           "Possessions": Possessions,
           "Buts Marqués": ButsMarques,
@@ -270,21 +273,20 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
       });
     });
 
+    // 4) Classement par critère (sur la moyenne/ratio d’équipe)
     const rankBy = (crit) => {
       const asc = !!ASC_GOOD[crit];
-      const arr = [...rowsPerMatch].sort((a, b) => {
+      return [...rowsByTeam].sort((a, b) => {
         const va = a.values[crit] ?? -Infinity;
         const vb = b.values[crit] ?? -Infinity;
         return asc ? va - vb : vb - va;
-        // NB : on trie sur la valeur du match (pas d’agrégat)
       });
-      return arr;
     };
 
     return { rankBy };
   }, [evenements, matchIndex]);
 
-  // ————————————————— UI —————————————————
+  // Sélecteurs (visuel inchangé)
   const selectors = [
     { label: "Critère 1", value: crit1, set: setCrit1 },
     { label: "Critère 2", value: crit2, set: setCrit2 },
@@ -295,15 +297,10 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
   const chosen = [crit1, crit2, crit3, crit4, crit5];
 
   const isRatioCrit = (crit) => crit.toLowerCase().includes("eff");
-  const fmt = (crit, v) => {
-    if (v == null || Number.isNaN(v)) return "—";
-    if (isRatioCrit(crit)) return `${(v * 100).toFixed(1)}%`;
-    return String(v);
-  };
+  const fmt = (crit, v) => (v == null || Number.isNaN(v) ? "—" : isRatioCrit(crit) ? `${(v * 100).toFixed(1)}%` : String(v));
 
   return (
     <div className="w-full flex flex-col items-center justify-center gap-6">
-      {/* --- Barre de 5 sélecteurs --- */}
       <div className="w-full bg-white border border-[#E4CDA1] rounded-2xl shadow p-4">
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           {selectors.map((cfg, i) => (
@@ -314,9 +311,7 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
                 className="w-full border border-gray-300 text-black rounded-lg px-3 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
               >
                 {CRITERES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
+                  <option key={c} value={c}>{c}</option>
                 ))}
               </select>
             </div>
@@ -324,19 +319,14 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
         </div>
       </div>
 
-      {/* --- 5 classements (par match) --- */}
       <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         {chosen.map((crit, idx) => {
           const ranking = rankBy(crit).slice(0, topN);
           return (
-            <div
-              key={idx}
-              className="bg-white border border-[#E4CDA1] rounded-2xl shadow overflow-hidden"
-            >
+            <div key={idx} className="bg-white border border-[#E4CDA1] rounded-2xl shadow overflow-hidden">
               <div className="px-4 py-3 border-b border-[#E4CDA1] bg-[#FFF8EA]">
                 <h3 className="text-sm font-semibold text-[#1a1a1a]">{crit}</h3>
               </div>
-
               <ol className="divide-y divide-gray-100">
                 {ranking.map((row, i2) => (
                   <li
@@ -350,16 +340,11 @@ export default function ClassementEquipe({ matchs, evenements, clubs = {}, topN 
                       <SafeLogo src={row.logo} alt={row.team} size={22} className="shrink-0" />
                       <div className="flex flex-col min-w-0">
                         <span className="text-sm text-black font-medium truncate">{row.team}</span>
-                        <span className="text-[11px] text-gray-500 truncate">
-                          {row.matchLabel}
-                        </span>
+                        <span className="text-[11px] text-gray-500 truncate">{row.matchLabel}</span>
                       </div>
                     </div>
-
                     <div className="flex flex-col items-end">
-                      <span className="text-sm font-semibold text-[#D4AF37]">
-                        {fmt(crit, row.values[crit])}
-                      </span>
+                      <span className="text-sm font-semibold text-[#D4AF37]">{fmt(crit, row.values[crit])}</span>
                       {(row.meta?.journee || row.meta?.date) && (
                         <span className="text-[11px] text-gray-400">
                           {row.meta?.journee ? `${row.meta.journee}` : ""}

@@ -25,22 +25,60 @@ export default function NavBar() {
     router.push("/connexion");
   };
 
+  /** ---------- Export PDF (simple & robuste) : imprime uniquement <main> ---------- */
+  const handleExportPdfSimple = () => {
+    const main = document.querySelector("main");
+    if (!main) {
+      alert("Impossible de trouver <main> sur la page.");
+      return;
+    }
+
+    // Styles impression : cache tout sauf <main>
+    const style = document.createElement("style");
+    style.setAttribute("data-print-style", "only-main");
+    style.innerHTML = `
+      @media print {
+        @page { size: A4; margin: 12mm; }
+        html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        /* cacher tout par défaut */
+        body * { visibility: hidden !important; }
+        /* ne montrer que <main> */
+        main, main * { visibility: visible !important; }
+        /* positionner <main> en haut à gauche pour le rendu PDF */
+        main { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
+        /* et on s'assure que nav/header/footer n'apparaissent pas */
+        nav, header, footer, .no-print, [data-no-print] { display: none !important; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Déclenche l'impression puis nettoie
+    const cleanup = () => {
+      const s = document.querySelector('style[data-print-style="only-main"]');
+      if (s && s.parentNode) s.parentNode.removeChild(s);
+    };
+
+    // Certains navigateurs ont besoin d'un petit délai
+    setTimeout(() => {
+      window.print();
+      // On nettoie un peu plus tard pour être sûr que l’impression a démarré
+      setTimeout(cleanup, 250);
+    }, 50);
+  };
+  /** --------------------------------------------------------------------- */
+
   if (checkingSession) return null;
 
   // Normalise le nom du match depuis le nom de fichier
   const normalizeMatchName = (filename) =>
-    filename
-      .replace(/^Données_?/i, "")
-      .replace(/\.(xlsx|csv)$/i, "")
-      .replace(/_/g, " ")
-      .trim();
+    filename.replace(/^Données_?/i, "").replace(/\.(xlsx|csv)$/i, "").replace(/_/g, " ").trim();
 
   async function parseXlsx(file) {
     const XLSX = await import("xlsx");
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }); // defval: "" => pas d'undefined
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     return rows;
   }
 
@@ -52,9 +90,8 @@ export default function NavBar() {
         skipEmptyLines: true,
         dynamicTyping: false,
         transformHeader: (h) => (h || "").trim(),
-        delimiter: "", // autodetect
+        delimiter: "",
         complete: (res) => {
-          // Nettoie les lignes vides résiduelles et trim des valeurs
           const rows = (res.data || []).map((row) => {
             const out = {};
             Object.keys(row).forEach((k) => {
@@ -79,11 +116,9 @@ export default function NavBar() {
       const ext = (name.split(".").pop() || "").toLowerCase();
 
       let rows = [];
-      if (ext === "xlsx") {
-        rows = await parseXlsx(file);
-      } else if (ext === "csv") {
-        rows = await parseCsv(file);
-      } else {
+      if (ext === "xlsx") rows = await parseXlsx(file);
+      else if (ext === "csv") rows = await parseCsv(file);
+      else {
         alert("Format non supporté. Choisis un .xlsx ou un .csv");
         return;
       }
@@ -99,40 +134,24 @@ export default function NavBar() {
       const ct = res.headers.get("content-type") || "";
       let payload = null;
       if (ct.includes("application/json")) {
-        try {
-          payload = await res.json();
-        } catch {
-          payload = null;
-        }
+        try { payload = await res.json(); } catch { payload = null; }
       } else {
         const text = await res.text();
         payload = text ? { message: text } : null;
       }
 
-      console.log("Import response:", {
-        status: res.status,
-        statusText: res.statusText,
-        contentType: ct,
-        payload,
-      });
-
       if (!res.ok) {
-        const msg =
-          payload?.error ||
-          payload?.message ||
-          `Erreur serveur (${res.status} ${res.statusText})`;
+        const msg = payload?.error || payload?.message || `Erreur serveur (${res.status} ${res.statusText})`;
         alert("Erreur d'import : " + msg);
         return;
       }
 
       alert(payload?.message || "Fichier importé avec succès !");
-      // -> rafraîchis ton state/route si besoin
       // router.refresh();
     } catch (err) {
       console.error("Erreur lors de l'import :", err);
       alert(err?.message || "Une erreur est survenue pendant l'import.");
     } finally {
-      // reset input pour permettre un nouvel import du même fichier
       e.target.value = "";
     }
   }
@@ -142,10 +161,7 @@ export default function NavBar() {
       <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md shadow px-4 py-3">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center space-x-4">
-            <Link
-              href="/"
-              className="text-xl font-semibold text-gray-700 flex items-center space-x-2"
-            >
+            <Link href="/" className="text-xl font-semibold text-gray-700 flex items-center space-x-2">
               <span
                 className="text-2xl text-[#b3974e] font-semibold"
                 style={{ fontFamily: "Poppins, sans-serif" }}
@@ -164,7 +180,6 @@ export default function NavBar() {
                 >
                   Importer Match
                 </label>
-
                 <input
                   id="fileUpload"
                   type="file"
@@ -172,6 +187,15 @@ export default function NavBar() {
                   className="hidden"
                   onChange={handleImportChange}
                 />
+
+                {/* Bouton Exporter PDF (uniquement si connecté) */}
+                <button
+                  onClick={handleExportPdfSimple}
+                  className="px-4 py-1 rounded-full bg-[#D4AF37] text-white hover:bg-[#b3974e] transition"
+                  title="Exporter uniquement le contenu de la page (main) en PDF"
+                >
+                  Exporter PDF
+                </button>
               </>
             )}
 
