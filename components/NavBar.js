@@ -24,48 +24,99 @@ export default function NavBar() {
     await supabase.auth.signOut();
     router.push("/connexion");
   };
-
-  /** ---------- Export PDF (simple & robuste) : imprime uniquement <main> ---------- */
-  const handleExportPdfSimple = () => {
-    const main = document.querySelector("main");
-    if (!main) {
-      alert("Impossible de trouver <main> sur la page.");
-      return;
-    }
-
-    // Styles impression : cache tout sauf <main>
-    const style = document.createElement("style");
-    style.setAttribute("data-print-style", "only-main");
-    style.innerHTML = `
-      @media print {
-        @page { size: A4; margin: 12mm; }
-        html, body { background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        /* cacher tout par défaut */
-        body * { visibility: hidden !important; }
-        /* ne montrer que <main> */
-        main, main * { visibility: visible !important; }
-        /* positionner <main> en haut à gauche pour le rendu PDF */
-        main { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
-        /* et on s'assure que nav/header/footer n'apparaissent pas */
-        nav, header, footer, .no-print, [data-no-print] { display: none !important; }
+  /** ---------------- Export PDF ---------------- */
+  const handleExportPdfDownload = async () => {
+    try {
+      const main = document.querySelector("main");
+      if (!main) {
+        alert("Impossible de trouver <main> sur la page.");
+        return;
       }
-    `;
-    document.head.appendChild(style);
 
-    // Déclenche l'impression puis nettoie
-    const cleanup = () => {
-      const s = document.querySelector('style[data-print-style="only-main"]');
-      if (s && s.parentNode) s.parentNode.removeChild(s);
-    };
+      const { toPng } = await import("html-to-image");
+      const { jsPDF } = await import("jspdf");
 
-    // Certains navigateurs ont besoin d'un petit délai
-    setTimeout(() => {
-      window.print();
-      // On nettoie un peu plus tard pour être sûr que l’impression a démarré
-      setTimeout(cleanup, 250);
-    }, 50);
+      // Dimensions réelles du contenu
+      const widthPx = Math.max(main.scrollWidth, main.clientWidth);
+      const heightPx = Math.max(main.scrollHeight, main.clientHeight);
+
+      // Capture en PNG HD
+      const dataUrlFull = await toPng(main, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        width: widthPx,
+        height: heightPx,
+        style: { transform: "none" },
+      });
+
+      // Chargement de l'image
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = dataUrlFull;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const isLandscape = img.width >= img.height;
+      const pdf = new jsPDF({
+        orientation: isLandscape ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      pdf.setProperties({
+        title: "HandViz Export",
+        subject: "Export du dashboard",
+        creator: "HandViz",
+      });
+
+      const margin = 10; // mm
+      const pageW = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageH = pdf.internal.pageSize.getHeight() - margin * 2;
+
+      const imgWmm = pageW;
+      const pxPerMm = img.width / imgWmm;
+      const imgHmm = img.height / pxPerMm;
+
+      if (imgHmm <= pageH) {
+        // Une seule page
+        pdf.addImage(dataUrlFull, "PNG", margin, margin, imgWmm, imgHmm, "", "FAST");
+      } else {
+        // Découpage en plusieurs pages
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = img.width;
+        const ctx = sliceCanvas.getContext("2d");
+
+        const slicePx = Math.floor(pageH * pxPerMm);
+        let offset = 0;
+        let pageIndex = 0;
+
+        while (offset < img.height) {
+          const hPx = Math.min(slicePx, img.height - offset);
+          sliceCanvas.height = hPx;
+          ctx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          ctx.drawImage(img, 0, offset, img.width, hPx, 0, 0, img.width, hPx);
+          const sliceUrl = sliceCanvas.toDataURL("image/png");
+
+          if (pageIndex > 0) pdf.addPage();
+          const hMm = hPx / pxPerMm;
+          pdf.addImage(sliceUrl, "PNG", margin, margin, imgWmm, hMm, "", "FAST");
+
+          offset += hPx;
+          pageIndex++;
+        }
+      }
+
+      const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15);
+      pdf.save(`HandViz_export_${stamp}.pdf`);
+    } catch (err) {
+      console.error("Export PDF error:", err);
+      alert("Impossible de générer le PDF.");
+    }
   };
-  /** --------------------------------------------------------------------- */
 
   if (checkingSession) return null;
 
@@ -134,14 +185,21 @@ export default function NavBar() {
       const ct = res.headers.get("content-type") || "";
       let payload = null;
       if (ct.includes("application/json")) {
-        try { payload = await res.json(); } catch { payload = null; }
+        try {
+          payload = await res.json();
+        } catch {
+          payload = null;
+        }
       } else {
         const text = await res.text();
         payload = text ? { message: text } : null;
       }
 
       if (!res.ok) {
-        const msg = payload?.error || payload?.message || `Erreur serveur (${res.status} ${res.statusText})`;
+        const msg =
+          payload?.error ||
+          payload?.message ||
+          `Erreur serveur (${res.status} ${res.statusText})`;
         alert("Erreur d'import : " + msg);
         return;
       }
@@ -188,11 +246,10 @@ export default function NavBar() {
                   onChange={handleImportChange}
                 />
 
-                {/* Bouton Exporter PDF (uniquement si connecté) */}
                 <button
-                  onClick={handleExportPdfSimple}
+                  onClick={handleExportPdfDownload}
                   className="px-4 py-1 rounded-full bg-[#D4AF37] text-white hover:bg-[#b3974e] transition"
-                  title="Exporter uniquement le contenu de la page (main) en PDF"
+                  title="Exporter le contenu principal en PDF"
                 >
                   Exporter PDF
                 </button>
