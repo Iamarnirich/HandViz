@@ -108,18 +108,27 @@ function clampDateReasonable(d) {
 function convertirTemps(val) {
   if (!val) return "00:00:00";
   const str = String(val).trim();
-  const parts = str.split(":").map((x) => Number(x));
+  const parts = str.split(":").map((x) => Number(x)).filter(x => !isNaN(x));
+  
+  // Si la parsing a échoué, retourner "00:00:00"
+  if (parts.length === 0 || parts.some(x => !isFinite(x))) {
+    return "00:00:00";
+  }
+  
   let h = 0,
     m = 0,
     s = 0;
   if (parts.length === 2) {
     m = parts[0];
     s = parts[1];
-  } else if (parts.length === 3) {
+  } else if (parts.length >= 3) {
     h = parts[0];
     m = parts[1];
     s = parts[2];
+  } else if (parts.length === 1) {
+    s = parts[0];
   }
+  
   h += Math.floor(m / 60);
   m = m % 60;
   h += Math.floor(s / 3600);

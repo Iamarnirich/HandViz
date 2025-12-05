@@ -28,6 +28,7 @@ const norm = (s) =>
   (s || "").toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 const starts = (s, p) => norm(s).startsWith(norm(p));
 const has = (s, p) => norm(s).includes(norm(p));
+
 const parsePossession = (txt) => {
   const m = norm(txt).match(/^possession\s+(.+?)\s*_\s*(.+?)\s*_/i);
   return m ? { equipe: (m[1] || "").trim(), adv: (m[2] || "").trim() } : null;
@@ -49,8 +50,61 @@ const isSevenMEvent = (e) => {
   return re.test(sect) || /att7m/.test(act) || re.test(rc) || re.test(rl);
 };
 
-const pickOffResSingle = (e, offenseField) => norm(offenseField ? e?.[offenseField] : e?.resultat_cthb);
-const pickDefResSingle = (e, defenseField) => norm(defenseField ? e?.[defenseField] : e?.resultat_limoges);
+/** Sélection résultat côté équipe/adversaire (multi-match, l’équipe peut être locale ou visiteuse) */
+const pickOffResMulti = (e, teamNorm) => {
+  const rc = norm(e?.resultat_cthb);
+  const rl = norm(e?.resultat_limoges);
+  if (teamNorm && rc.includes(teamNorm)) return rc;
+  if (teamNorm && rl.includes(teamNorm)) return rl;
+  return rc || rl || "";
+};
+const pickDefResMulti = (e, teamNorm) => {
+  const rc = norm(e?.resultat_cthb);
+  const rl = norm(e?.resultat_limoges);
+  if (teamNorm && rc.includes(teamNorm)) return rl;
+  if (teamNorm && rl.includes(teamNorm)) return rc;
+  return rl || rc || "";
+};
+
+/** Déduire l’adversaire pour un match donné et une équipe donnée (comme dans GaugesPanel) */
+const inferOppForMatch = (events, teamNorm) => {
+  if (!teamNorm) return "";
+  const counts = new Map();
+  const bump = (name) => {
+    if (!name) return;
+    const k = norm(name);
+    if (!k || k === teamNorm) return;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  };
+
+  (events || []).forEach((e) => {
+    const p = parsePossession(e?.possession);
+    if (p) {
+      const a = norm(p.equipe);
+      const b = norm(p.adv);
+      if (a === teamNorm && b) bump(b);
+      if (b === teamNorm && a) bump(a);
+    } else {
+      const rc = norm(e?.resultat_cthb);
+      const rl = norm(e?.resultat_limoges);
+      const rx = /^(but|tir|perte|7m|exclusion|2')\s+([^\s]+)/i;
+      const m1 = rc.match(rx);
+      const m2 = rl.match(rx);
+      if (m1 && norm(m1[2]) !== teamNorm) bump(m1[2]);
+      if (m2 && norm(m2[2]) !== teamNorm) bump(m2[2]);
+    }
+  });
+
+  let best = "";
+  let max = 0;
+  counts.forEach((v, k) => {
+    if (v > max) {
+      max = v;
+      best = k;
+    }
+  });
+  return best;
+};
 
 const driveToDirect = (url) => {
   if (!url) return url;
@@ -61,7 +115,9 @@ const driveToDirect = (url) => {
     const m2 = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (m2 && m2[1]) return `https://drive.google.com/uc?id=${m2[1]}`;
     return s;
-  } catch { return url; }
+  } catch {
+    return url;
+  }
 };
 
 const SafeLogo = ({ src, alt, size = 22, className = "" }) => {
@@ -113,12 +169,26 @@ export default function ClassementEquipe({
   const { rankBy } = useMemo(() => {
     // 1) Agrégat par (match, équipe)
     const initAgg = () => ({
-      possOff: 0, possAP: 0, possGE: 0,
-      buts: 0, butsAP: 0, butsGE: 0,
-      pertes: 0, tirsTotalOff: 0, neutraSubies: 0,
-      butsConc: 0, arrets: 0, ballesRecup: 0, neutraReussies: 0,
-      possAdv: 0, possAPadv: 0, possGEadv: 0,
-      butsAPrecus: 0, butsGErecus: 0,
+      // OFF
+      possOff: 0,
+      possAP: 0,
+      possGE: 0,
+      buts: 0,
+      butsAP: 0,
+      butsGE: 0,
+      pertes: 0,
+      tirsTotalOff: 0,
+      neutraSubies: 0,
+      // DEF
+      possAdv: 0,
+      possAPadv: 0,
+      possGEadv: 0,
+      butsConc: 0,
+      butsAPrecus: 0,
+      butsGErecus: 0,
+      arrets: 0,
+      ballesRecup: 0,
+      neutraReussies: 0,
     });
 
     const aggByMatchTeam = new Map();
@@ -129,71 +199,145 @@ export default function ClassementEquipe({
       return aggByMatchTeam.get(k);
     };
 
+    // Regrouper les événements par match
+    const byMatch = new Map();
     (evenements || []).forEach((e) => {
       const idm = toIdKey(e.id_match);
+      if (!byMatch.has(idm)) byMatch.set(idm, []);
+      byMatch.get(idm).push(e);
+    });
+
+    // Pour chaque match, traiter home + away
+    byMatch.forEach((events, idm) => {
       const info = matchIndex[idm];
       if (!info) return;
 
-      const home = info.home || "";
-      const away = info.away || "";
-      const a = norm(e.nom_action);
-      const p = parsePossession(e.possession);
+      [info.home, info.away].forEach((teamName) => {
+        if (!teamName) return;
+        const teamNorm = norm(teamName);
+        if (!teamNorm) return;
 
-      const offHome = pickOffResSingle(e, "resultat_cthb");
-      const defAway = pickDefResSingle(e, "resultat_limoges");
-      const offAway = pickOffResSingle(e, "resultat_limoges");
-      const defHome = pickDefResSingle(e, "resultat_cthb");
+        const oppNorm = inferOppForMatch(events, teamNorm);
+        const A = getAgg(idm, teamName);
 
-      const handleForTeam = (team, offRes, defRes) => {
-        const A = getAgg(idm, team);
+        events.forEach((e) => {
+          const a = norm(e?.nom_action);
+          const pStr = norm(e?.possession);
+          const rcR = norm(e?.resultat_cthb);
+          const rlR = norm(e?.resultat_limoges);
+          const sect = norm(e?.secteur);
+          const s = norm(e?.sanctions);
+          const seven = isSevenMEvent(e);
 
-        const seven = isSevenMEvent(e);
-        const isAP = a.startsWith(`attaque ${norm(team)}`);
-        const isGE =
-          a.startsWith(`ca ${norm(team)}`) ||
-          a.startsWith(`er ${norm(team)}`) ||
-          a.startsWith(`mb ${norm(team)}`) ||
-          a.startsWith(`transition ${norm(team)}`);
+          // Résultats vus du point de vue de l’équipe
+          const rTeam = pickOffResMulti(e, teamNorm);
+          const rOpp = pickDefResMulti(e, teamNorm);
 
-        // OFF
-        if (p && norm(p.equipe) === norm(team)) {
-          A.possOff++; 
-          if (isAP) A.possAP++; 
-          if (isGE) A.possGE++;
-        }
-        const isButTeam = starts(offRes, `but ${team}`);
-        const isShotAny = starts(offRes, "tir ") || isButTeam || starts(offRes, `7m obtenu ${team}`);
-        if (isShotAny && !seven) A.tirsTotalOff++;
-        if (isButTeam || starts(offRes, `7m obtenu ${team}`)) {
-          A.buts++; if (isAP) A.butsAP++; if (isGE) A.butsGE++;
-        }
-        if (starts(offRes, `perte de balle ${team}`)) A.pertes++;
-        if (has(offRes, "neutralisee") || has(offRes, "neutralisée")) A.neutraSubies++;
+          /** ---------- OFFENSIF pour teamName ---------- */
+          const isTeamEvt =
+            (a && a.includes(` ${teamNorm}`)) ||
+            (pStr && pStr.startsWith(`possession ${teamNorm}`)) ||
+            (rcR && rcR.includes(` ${teamNorm}`)) ||
+            (rlR && rlR.includes(` ${teamNorm}`));
 
-        // DEF — possessions adverses
-        if (p && norm(p.equipe) !== norm(team) && (norm(p.equipe) === norm(home) || norm(p.equipe) === norm(away))) {
-          A.possAdv++;
-          const oppIsAP = a.startsWith("attaque ");
-          const oppIsGE =
-            a.startsWith("ca ") || a.startsWith("er ") || a.startsWith("mb ") || a.startsWith("transition ");
-          if (oppIsAP) A.possAPadv++;
-          if (oppIsGE) A.possGEadv++;
+          if (isTeamEvt) {
+            if (pStr.startsWith(`possession ${teamNorm}`)) {
+              A.possOff++;
+            }
 
-          const isButOpp = starts(defRes, "but ") || starts(defRes, "7m obtenu");
-          if (isButOpp) {
-            A.butsConc++;
-            if (oppIsAP) A.butsAPrecus++;
-            if (oppIsGE) A.butsGErecus++;
+            const isAP = a.startsWith(`attaque ${teamNorm}`);
+            const isGE =
+              a.startsWith(`ca ${teamNorm}`) ||
+              a.startsWith(`er ${teamNorm}`) ||
+              a.startsWith(`mb ${teamNorm}`) ||
+              a.startsWith(`transition ${teamNorm}`);
+
+            if (isAP) A.possAP++;
+            if (isGE) A.possGE++;
+
+            const effBut =
+              rTeam.startsWith(`but ${teamNorm}`) ||
+              rTeam.startsWith(`7m obtenu ${teamNorm}`);
+            const isShotAny = rTeam.startsWith("tir ") || rTeam.startsWith(`but ${teamNorm}`);
+
+            if (isAP || isGE || seven) {
+              if (effBut) {
+                A.buts++;
+                if (isAP) A.butsAP++;
+                if (isGE) A.butsGE++;
+              }
+            }
+
+            if (isShotAny && !seven) {
+              A.tirsTotalOff++;
+            }
+
+            if (rTeam.startsWith(`perte de balle ${teamNorm}`)) {
+              A.pertes++;
+            }
+
+            if (rTeam.includes(teamNorm) && (has(rTeam, "neutralisee") || has(rTeam, "neutralisée"))) {
+              A.neutraSubies++;
+            }
           }
-          if (has(defRes, "tir arrete ") || has(defRes, "tir arrete") || has(defRes, "tir arrêté ") || has(defRes, "tir arret "))
-            A.arrets++;
-          if (has(defRes, "perte de balle ")) A.ballesRecup++;
-          if (has(defRes, "neutralisee") || has(defRes, "neutralisée")) A.neutraReussies++;
-        }
-      };
 
-      if (home) handleForTeam(home, offHome, defAway);
-      if (away) handleForTeam(away, offAway, defHome);
+          /** ---------- DÉFENSIF pour teamName (attaque de l’adversaire) ---------- */
+          if (!oppNorm) return;
+          const opp = oppNorm;
+
+          const isOppAction =
+            (a && a.includes(` ${opp}`)) ||
+            (pStr && pStr.includes(`possession ${opp}`)) ||
+            (rcR && rcR.includes(` ${opp}`)) ||
+            (rlR && rlR.includes(` ${opp}`));
+          if (!isOppAction) return;
+
+          if (pStr.startsWith(`possession ${opp}`)) {
+            A.possAdv++;
+          }
+
+          const isAPopp = a.startsWith(`attaque ${opp}`);
+          const isGEopp =
+            a.startsWith(`ca ${opp}`) ||
+            a.startsWith(`er ${opp}`) ||
+            a.startsWith(`mb ${opp}`) ||
+            a.startsWith(`transition ${opp}`);
+
+          if (isAPopp) A.possAPadv++;
+          if (isGEopp) A.possGEadv++;
+
+          const isButOpp =
+            rOpp.startsWith(`but ${opp}`) ||
+            rOpp.startsWith(`7m obtenu`) ||
+            s.startsWith("2") ||
+            s.startsWith("cr");
+
+          if ((isAPopp || isGEopp || seven) && isButOpp) {
+            A.butsConc++;
+            if (isAPopp) A.butsAPrecus++;
+            if (isGEopp) A.butsGErecus++;
+          }
+
+          // Arrêts GB (tir arrêté par notre gardien)
+          if (
+            has(rOpp, "tir arrete ") ||
+            has(rOpp, "tir arrêté ") ||
+            has(rOpp, "tir arret ")
+          ) {
+            A.arrets++;
+          }
+
+          // Balles récupérées (perte de balle de l’adversaire)
+          if (has(rOpp, "perte de balle ")) {
+            A.ballesRecup++;
+          }
+
+          // Neutralisations réussies (neutralisée pour l’adversaire → réussite défensive)
+          if (has(rOpp, "neutralisee") || has(rOpp, "neutralisée")) {
+            A.neutraReussies++;
+          }
+        });
+      });
     });
 
     // 2) Re-agrégation par équipe → totaux + nbMatchs
@@ -201,11 +345,15 @@ export default function ClassementEquipe({
     const pushTeam = (team, logo, A) => {
       if (!teamTotals.has(team)) {
         teamTotals.set(team, {
-          sums: { ...A }, n: 1, logo,
+          sums: { ...A },
+          n: 1,
+          logo,
         });
       } else {
         const t = teamTotals.get(team);
-        Object.keys(A).forEach((k) => { t.sums[k] += A[k]; });
+        Object.keys(A).forEach((k) => {
+          t.sums[k] += A[k];
+        });
         t.n += 1;
         t.logo = t.logo || logo; // garde un logo si dispo
       }
@@ -238,23 +386,25 @@ export default function ClassementEquipe({
       const BallesRecup = avg(S.ballesRecup);
       const NeutraReussies = avg(S.neutraReussies);
 
-      // ratios → sur les totaux cumulés
+      // ratios → sur les totaux cumulés (comme dans les gauges)
       const EffGlobale = S.possOff > 0 ? +(S.buts / S.possOff).toFixed(3) : 0;
       const EffAP = S.possAP > 0 ? +(S.butsAP / S.possAP).toFixed(3) : 0;
       const EffGE = S.possGE > 0 ? +(S.butsGE / S.possGE).toFixed(3) : 0;
 
-      const EffDefGlobale = S.possAdv > 0 ? +(((S.possAdv - S.butsConc) / S.possAdv)).toFixed(3) : 0;
-      const EffDefPlacee = S.possAPadv > 0 ? +(((S.possAPadv - S.butsAPrecus) / S.possAPadv)).toFixed(3) : 0;
-      const EffDefGE = S.possGEadv > 0 ? +(((S.possGEadv - S.butsGErecus) / S.possGEadv)).toFixed(3) : 0;
+      const EffDefGlobale =
+        S.possAdv > 0 ? +(((S.possAdv - S.butsConc) / S.possAdv)).toFixed(3) : 0;
+      const EffDefPlacee =
+        S.possAPadv > 0 ? +(((S.possAPadv - S.butsAPrecus) / S.possAPadv)).toFixed(3) : 0;
+      const EffDefGE =
+        S.possGEadv > 0 ? +(((S.possGEadv - S.butsGErecus) / S.possGEadv)).toFixed(3) : 0;
 
       rowsByTeam.push({
         team,
         logo: obj.logo || null,
-        matchId: `avg-${team}`, // conservé pour la key du li
-        matchLabel: `Moyenne • ${n} match${n > 1 ? "s" : ""}`,
+        matchId: `avg-${team}`,
         meta: { journee: "", date: "" },
         values: {
-          "Possessions": Possessions,
+          Possessions,
           "Buts Marqués": ButsMarques,
           "Pertes de balle": Pertes,
           "Tirs total": TirsTotal,
@@ -297,12 +447,17 @@ export default function ClassementEquipe({
   const chosen = [crit1, crit2, crit3, crit4, crit5];
 
   const isRatioCrit = (crit) => crit.toLowerCase().includes("eff");
-  const fmt = (crit, v) => (v == null || Number.isNaN(v) ? "—" : isRatioCrit(crit) ? `${(v * 100).toFixed(1)}%` : String(v));
+  const fmt = (crit, v) =>
+    v == null || Number.isNaN(v)
+      ? "—"
+      : isRatioCrit(crit)
+      ? `${(v * 100).toFixed(1)}%`
+      : String(v);
 
   return (
     <div className="w-full flex flex-col items-center justify-center gap-6">
       <div className="w-full bg-white border border-[#E4CDA1] rounded-2xl shadow p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm-grid-cols-5 md:grid-cols-5 gap-3">
           {selectors.map((cfg, i) => (
             <div key={i} className="flex flex-col">
               <select
@@ -311,7 +466,9 @@ export default function ClassementEquipe({
                 className="w-full border border-gray-300 text-black rounded-lg px-3 py-2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-[#D4AF37]"
               >
                 {CRITERES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </div>
@@ -323,7 +480,10 @@ export default function ClassementEquipe({
         {chosen.map((crit, idx) => {
           const ranking = rankBy(crit).slice(0, topN);
           return (
-            <div key={idx} className="bg-white border border-[#E4CDA1] rounded-2xl shadow overflow-hidden">
+            <div
+              key={idx}
+              className="bg-white border border-[#E4CDA1] rounded-2xl shadow overflow-hidden"
+            >
               <div className="px-4 py-3 border-b border-[#E4CDA1] bg-[#FFF8EA]">
                 <h3 className="text-sm font-semibold text-[#1a1a1a]">{crit}</h3>
               </div>
@@ -339,12 +499,18 @@ export default function ClassementEquipe({
                       </span>
                       <SafeLogo src={row.logo} alt={row.team} size={22} className="shrink-0" />
                       <div className="flex flex-col min-w-0">
-                        <span className="text-sm text-black font-medium truncate">{row.team}</span>
-                        <span className="text-[11px] text-gray-500 truncate">{row.matchLabel}</span>
+                        <span className="text-sm text-black font-medium truncate">
+                          {row.team}
+                        </span>
+                        <span className="text-[11px] text-gray-500 truncate">
+                          {row.matchLabel}
+                        </span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-sm font-semibold text-[#D4AF37]">{fmt(crit, row.values[crit])}</span>
+                      <span className="text-sm font-semibold text-[#D4AF37]">
+                        {fmt(crit, row.values[crit])}
+                      </span>
                       {(row.meta?.journee || row.meta?.date) && (
                         <span className="text-[11px] text-gray-400">
                           {row.meta?.journee ? `${row.meta.journee}` : ""}
