@@ -21,7 +21,7 @@ const CRITERES = [
   "Efficacité déf. GE",
 ];
 
-const ASC_GOOD = { "Pertes de balle": true, "Buts encaissées": true };
+//const ASC_GOOD = { "Pertes de balle": true, "Buts encaissées": true };
 
 const toIdKey = (v) => (v == null ? "" : String(v));
 const norm = (s) =>
@@ -174,6 +174,7 @@ export default function ClassementEquipe({
       possAP: 0,
       possGE: 0,
       buts: 0,
+      butglobal: 0,
       butsAP: 0,
       butsGE: 0,
       pertes: 0,
@@ -225,7 +226,6 @@ export default function ClassementEquipe({
           const pStr = norm(e?.possession);
           const rcR = norm(e?.resultat_cthb);
           const rlR = norm(e?.resultat_limoges);
-          const sect = norm(e?.secteur);
           const s = norm(e?.sanctions);
           const seven = isSevenMEvent(e);
 
@@ -255,20 +255,25 @@ export default function ClassementEquipe({
             if (isAP) A.possAP++;
             if (isGE) A.possGE++;
 
-            const effBut =
-              rTeam.startsWith(`but ${teamNorm}`) ||
-              rTeam.startsWith(`7m obtenu ${teamNorm}`);
-            const isShotAny = rTeam.startsWith("tir ") || rTeam.startsWith(`but ${teamNorm}`);
+            const effBut = rTeam.startsWith(`but ${teamNorm}`);
+            const isShotAny =
+              rTeam.startsWith(`tir contré ${teamNorm}`) ||
+              rTeam.startsWith(`tir contre ${teamNorm}`) ||
+              rTeam.startsWith(`tir hc ${teamNorm}`) ||
+              rTeam.startsWith(`tir arrete ${teamNorm}`) ||
+              rTeam.startsWith(`tir arrêté ${teamNorm}`) ||
+              rTeam.startsWith(`but ${teamNorm}`);
 
-            if (isAP || isGE || seven) {
-              if (effBut) {
-                A.buts++;
-                if (isAP) A.butsAP++;
-                if (isGE) A.butsGE++;
-              }
+            if (effBut) {
+              A.buts++;
             }
+            if (isAP || isGE || seven) {
+              if (effBut || rTeam.startsWith(`7m obtenu ${teamNorm}`)) A.butglobal++;
+            }
+            if (isAP && (effBut || rTeam.startsWith(`7m obtenu ${teamNorm}`))) A.butsAP++;
+            if (isGE && (effBut || rTeam.startsWith(`7m obtenu ${teamNorm}`))) A.butsGE++;
 
-            if (isShotAny && !seven) {
+            if (isShotAny) {
               A.tirsTotalOff++;
             }
 
@@ -306,16 +311,16 @@ export default function ClassementEquipe({
           if (isAPopp) A.possAPadv++;
           if (isGEopp) A.possGEadv++;
 
-          const isButOpp =
-            rOpp.startsWith(`but ${opp}`) ||
-            rOpp.startsWith(`7m obtenu`) ||
-            s.startsWith("2") ||
-            s.startsWith("cr");
+          const isButOpp = rOpp.startsWith(`but ${opp}`);
 
-          if ((isAPopp || isGEopp || seven) && isButOpp) {
-            A.butsConc++;
+          if (isButOpp || rOpp.startsWith(`7m obtenu`) || s.startsWith("2") || s.startsWith("cr")) {
             if (isAPopp) A.butsAPrecus++;
             if (isGEopp) A.butsGErecus++;
+          }
+          if (isAPopp || isGEopp || seven) {
+            if (isButOpp || rOpp.startsWith(`7m obtenu`) || s.startsWith("2") || s.startsWith("cr")) {
+              A.butsConc++;
+            }
           }
 
           // Arrêts GB (tir arrêté par notre gardien)
@@ -359,16 +364,58 @@ export default function ClassementEquipe({
       }
     };
 
+    // *** NOUVELLE STRUCTURE : ratios par match pour les 6 critères d'efficacité ***
+    const teamEffLists = new Map(); // team -> { effGlob:[], effAP:[], effGE:[], effDefGlob:[], effDefAP:[], effDefGE:[] }
+    const getTeamEff = (team) => {
+      if (!teamEffLists.has(team)) {
+        teamEffLists.set(team, {
+          effGlob: [],
+          effAP: [],
+          effGE: [],
+          effDefGlob: [],
+          effDefAP: [],
+          effDefGE: [],
+        });
+      }
+      return teamEffLists.get(team);
+    };
+
     aggByMatchTeam.forEach((A, k) => {
       const [idm, team] = k.split("|");
       const info = matchIndex[idm] || {};
       const isHome = norm(team) === norm(info.home);
       const logo = isHome ? info.homeLogo : info.awayLogo;
       pushTeam(team, logo, A);
+
+      // Ajout des ratios par match pour cette équipe (comme GaugesPanel, mais en décimal 0–1)
+      const eff = getTeamEff(team);
+
+      if (A.possOff > 0) {
+        eff.effGlob.push(A.butglobal / A.possOff);
+      }
+      if (A.possAP > 0) {
+        eff.effAP.push(A.butsAP / A.possAP);
+      }
+      if (A.possGE > 0) {
+        eff.effGE.push(A.butsGE / A.possGE);
+      }
+
+      if (A.possAdv > 0) {
+        eff.effDefGlob.push((A.possAdv - A.butsConc) / A.possAdv);
+      }
+      if (A.possAPadv > 0) {
+        eff.effDefAP.push((A.possAPadv - A.butsAPrecus) / A.possAPadv);
+      }
+      if (A.possGEadv > 0) {
+        eff.effDefGE.push((A.possGEadv - A.butsGErecus) / A.possGEadv);
+      }
     });
 
-    // 3) Lignes finales par équipe = moyennes par match + ratios sur totaux
+    // 3) Lignes finales par équipe = moyennes par match + ratios sur moyennes de ratios
     const rowsByTeam = [];
+    const avgList = (arr) =>
+      !arr || arr.length === 0 ? 0 : +(arr.reduce((s, x) => s + x, 0) / arr.length).toFixed(3);
+
     teamTotals.forEach((obj, team) => {
       const { sums: S, n } = obj;
 
@@ -386,17 +433,15 @@ export default function ClassementEquipe({
       const BallesRecup = avg(S.ballesRecup);
       const NeutraReussies = avg(S.neutraReussies);
 
-      // ratios → sur les totaux cumulés (comme dans les gauges)
-      const EffGlobale = S.possOff > 0 ? +(S.buts / S.possOff).toFixed(3) : 0;
-      const EffAP = S.possAP > 0 ? +(S.butsAP / S.possAP).toFixed(3) : 0;
-      const EffGE = S.possGE > 0 ? +(S.butsGE / S.possGE).toFixed(3) : 0;
+      // ratios → moyenne des ratios par match (comme GaugesPanel, mais en décimal 0–1)
+      const eff = teamEffLists.get(team) || {};
+      const EffGlobale = avgList(eff.effGlob);
+      const EffAP = avgList(eff.effAP);
+      const EffGE = avgList(eff.effGE);
 
-      const EffDefGlobale =
-        S.possAdv > 0 ? +(((S.possAdv - S.butsConc) / S.possAdv)).toFixed(3) : 0;
-      const EffDefPlacee =
-        S.possAPadv > 0 ? +(((S.possAPadv - S.butsAPrecus) / S.possAPadv)).toFixed(3) : 0;
-      const EffDefGE =
-        S.possGEadv > 0 ? +(((S.possGEadv - S.butsGErecus) / S.possGEadv)).toFixed(3) : 0;
+      const EffDefGlobale = avgList(eff.effDefGlob);
+      const EffDefPlacee = avgList(eff.effDefAP);
+      const EffDefGE = avgList(eff.effDefGE);
 
       rowsByTeam.push({
         team,
@@ -425,11 +470,12 @@ export default function ClassementEquipe({
 
     // 4) Classement par critère (sur la moyenne/ratio d’équipe)
     const rankBy = (crit) => {
-      const asc = !!ASC_GOOD[crit];
+      //const asc = !!ASC_GOOD[crit];
       return [...rowsByTeam].sort((a, b) => {
         const va = a.values[crit] ?? -Infinity;
         const vb = b.values[crit] ?? -Infinity;
-        return asc ? va - vb : vb - va;
+        //return asc ? va - vb : vb - va;
+        return va - vb , vb - va;
       });
     };
 
@@ -511,13 +557,6 @@ export default function ClassementEquipe({
                       <span className="text-sm font-semibold text-[#D4AF37]">
                         {fmt(crit, row.values[crit])}
                       </span>
-                      {(row.meta?.journee || row.meta?.date) && (
-                        <span className="text-[11px] text-gray-400">
-                          {row.meta?.journee ? `${row.meta.journee}` : ""}
-                          {row.meta?.journee && row.meta?.date ? " · " : ""}
-                          {row.meta?.date ? `${row.meta.date}` : ""}
-                        </span>
-                      )}
                     </div>
                   </li>
                 ))}
